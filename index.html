@@ -2,10 +2,12 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="LabelSpy 2.2 — AI-анализ пищевых этикеток с Tesseract OCR и Google Gemini. Распознавание текста, E-коды, аллергены, AI-аналитика" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="LabelSpy 3.0 — AI-анализ пищевых этикеток. Gemini Vision OCR 99%, работает из России через CORS Proxy" />
   <meta name="theme-color" content="#0b1320" />
-  <title>LabelSpy 2.2 — AI Анализ Этикеток</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>LabelSpy 3.0 — AI Анализ Этикеток</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='90' fill='%2360a5fa'/><text x='96' y='130' font-size='90' font-weight='bold' text-anchor='middle' fill='%230b1320'>🔍</text></svg>" />
   <link rel="stylesheet" href="./styles.css" />
@@ -17,27 +19,27 @@
         <div class="brand">
           <div class="brand-dot"></div>
           <div>
-            <div class="brand-title">LabelSpy 2.2 🤖</div>
-            <div class="brand-subtitle">AI-анализ пищевых этикеток</div>
+            <div class="brand-title">LabelSpy 3.0</div>
+            <div class="brand-subtitle">AI-анализ этикеток</div>
           </div>
         </div>
         <div class="header-actions">
-          <button class="btn btn-secondary" id="btnOpenAbout">ℹ️ О проекте</button>
-          <a href="" id="githubLink" class="btn btn-secondary" style="text-decoration: none">⭐ GitHub</a>
+          <button class="btn btn-secondary btn-sm" id="btnOpenAbout">ℹ️</button>
+          <a href="" id="githubLink" class="btn btn-secondary btn-sm" style="text-decoration: none">⭐</a>
         </div>
       </div>
     </div>
   </div>
 
   <div class="container">
-    <!-- OCR & Input Section -->
+    <!-- OCR & Input -->
     <div class="card glass-card">
-      <h2>📸 Шаг 1: Захват состава</h2>
+      <h2>📸 Захват состава</h2>
       
       <div class="upload">
-        <p class="muted small">Загрузите фото этикетки продукта или вставьте текст состава вручную</p>
-        <input type="file" id="fileInput" accept="image/*" />
-        <div class="upload-help">PNG, JPG, WebP. До 5 MB. <strong>Gemini через CORS Proxy</strong> — точность 99%!</div>
+        <p class="muted small">Загрузите фото этикетки</p>
+        <input type="file" id="fileInput" accept="image/*" capture="environment" />
+        <div class="upload-help">🌐 <strong>Gemini работает из РФ</strong> через Multi-Proxy!</div>
       </div>
 
       <div class="preview-row">
@@ -49,7 +51,7 @@
         </div>
         
         <div class="actions">
-          <button class="btn btn-secondary btn-block" id="btnUseSample">📋 Использовать пример</button>
+          <button class="btn btn-secondary btn-block" id="btnUseSample">📋 Пример</button>
           
           <div class="field">
             <label class="field-label">Язык OCR</label>
@@ -67,18 +69,18 @@
             </button>
             <button class="btn btn-gemini" id="btnGeminiOcr" disabled>
               <span class="btn-icon">🤖</span>
-              <span>Gemini Vision</span>
+              <span>Gemini</span>
             </button>
           </div>
           
-          <div class="info-box">
-            <span class="info-icon">ℹ️</span>
-            <span class="info-text"><strong>Tesseract</strong> — быстрый (офлайн), <strong>Gemini</strong> — точный (99%, через CORS Proxy)</span>
+          <div class="info-box-compact">
+            🔍 <strong>Tesseract</strong> — быстрый<br>
+            🤖 <strong>Gemini</strong> — точный (99%)
           </div>
           
           <div id="ocrStatus" class="progress hidden">
             <div class="progress-row">
-              <span class="muted small">OCR в процессе...</span>
+              <span class="muted small">OCR...</span>
             </div>
             <div class="progressbar">
               <div id="ocrBar" class="progressbar-fill"></div>
@@ -88,33 +90,32 @@
       </div>
 
       <div class="field" style="margin-top: 14px">
-        <label class="field-label">Текст состава (можно отредактировать)</label>
-        <textarea class="textarea" id="textInput" placeholder="Состав будет выведен сюда или вставьте вручную..."></textarea>
+        <label class="field-label">Текст состава</label>
+        <textarea class="textarea" id="textInput" placeholder="Состав будет выведен сюда..."></textarea>
         <div class="inline-actions">
           <button class="btn btn-primary btn-lg" id="btnAnalyze">
             <span class="btn-icon">✨</span>
-            <span>Анализировать состав</span>
+            <span>Анализировать</span>
           </button>
           <button class="btn btn-secondary" id="btnClear">🗑️ Очистить</button>
         </div>
       </div>
     </div>
 
-    <!-- Results Section -->
+    <!-- Results -->
     <div id="results" class="hidden">
       <div class="card glass-card">
         <div class="results-header">
-          <h2>📊 Результаты анализа</h2>
+          <h2>📊 Результаты</h2>
           <div class="results-actions">
-            <button class="btn btn-secondary" id="btnCompare">🔄 В сравнение</button>
-            <button class="btn btn-secondary" id="btnSaveToHistory">💾 В историю</button>
+            <button class="btn btn-secondary btn-sm" id="btnGeneratePDF">📄 PDF</button>
+            <button class="btn btn-secondary btn-sm" id="btnCompare">🔄</button>
+            <button class="btn btn-secondary btn-sm" id="btnSaveToHistory">💾</button>
           </div>
         </div>
 
-        <!-- AI Analysis Block -->
-        <div id="aiAnalysis" class="hidden ai-analysis-card">
-          <div class="pill pill-yellow">⏳ Анализирую с помощью Gemini AI...</div>
-        </div>
+        <!-- AI Analysis -->
+        <div id="aiAnalysis" class="hidden ai-analysis-card"></div>
 
         <!-- Verdict -->
         <div id="overallVerdict" class="verdict verdict-green">
@@ -133,66 +134,65 @@
             </div>
             <div class="mini-card">
               <div class="mini-icon">🍭</div>
-              <div class="mini-title">Скр. сахара</div>
+              <div class="mini-title">Сахара</div>
               <div class="mini-value" id="metricSugars">0</div>
             </div>
           </div>
         </div>
 
-        <!-- E-codes Table -->
+        <!-- E-codes -->
         <div id="ecodesTable" class="table hidden"></div>
 
         <!-- Allergens -->
         <div id="allergensBlock" class="hidden alert-block">
-          <h3>⚠️ Возможные аллергены</h3>
+          <h3>⚠️ Аллергены</h3>
           <div id="allergensContent" class="pills-row"></div>
         </div>
 
-        <!-- Hidden Sugars -->
+        <!-- Sugars -->
         <div id="sugarsBlock" class="hidden alert-block">
           <h3>🍬 Скрытые сахара</h3>
           <div id="sugarsContent" class="pills-row"></div>
         </div>
 
-        <!-- Composition Snippet -->
+        <!-- Composition -->
         <div class="composition-block">
-          <h3>📋 Распознанный состав</h3>
+          <h3>📋 Состав</h3>
           <div id="compositionSnippet" class="snippet">—</div>
         </div>
 
-        <!-- Nutrients & Traffic Light -->
+        <!-- Nutrients -->
         <div class="nutrients-section">
-          <h3>🚦 Светофор: Сахар / Жир / Соль</h3>
-          <p class="small muted">Введите значения из этикетки (или они уже распознаны).</p>
+          <h3>🚦 Светофор</h3>
           
           <div class="nutrients-grid">
             <div class="field">
-              <label class="field-label">🍭 Сахар (г/100г)</label>
+              <label class="field-label">Сахар (г/100г)</label>
               <input type="number" id="nutrSugar" placeholder="0" step="0.1" />
             </div>
             <div class="field">
-              <label class="field-label">🧈 Жир (г/100г)</label>
+              <label class="field-label">Жир (г/100г)</label>
               <input type="number" id="nutrFat" placeholder="0" step="0.1" />
             </div>
             <div class="field">
-              <label class="field-label">🧂 Соль (г/100г)</label>
+              <label class="field-label">Соль (г/100г)</label>
               <input type="number" id="nutrSalt" placeholder="0" step="0.1" />
             </div>
           </div>
           
-          <button class="btn btn-primary" id="btnRecalc">♻️ Пересчитать светофор</button>
+          <button class="btn btn-primary btn-block" id="btnRecalc">♻️ Пересчитать</button>
 
           <div class="traffic">
             <div class="traffic-item">
-              <div class="traffic-label">🍭 Сахар</div>
+              <div class="traffic-label">Сахар</div>
               <div id="tlSugar" class="pill pill-unknown">—</div>
             </div>
             <div class="traffic-item">
-              <div class="traffic-label">🧈 Жир</div>
+              <div class="traffic-label">Жир</div>
               <div id="tlFat" class="pill pill-unknown">—</div>
             </div>
             <div class="traffic-item">
-              <div class="traffic-label">🧂 Соль</div>
+              <div class="traffic-label">Соль</div>
               <div id="tlSalt" class="pill pill-unknown">—</div>
             </div>
           </div>
@@ -201,64 +201,54 @@
 
       <!-- History -->
       <div id="historyBlock" class="card glass-card hidden">
-        <h2>📜 История анализов</h2>
+        <h2>📜 История</h2>
         <div id="historyContent" class="history-list"></div>
       </div>
     </div>
 
-    <!-- About Dialog -->
+    <!-- About -->
     <dialog id="aboutDialog" class="dialog">
       <form method="dialog">
-        <h2>🔍 О LabelSpy 2.2</h2>
-        <p>Профессиональное веб-приложение для AI-анализа пищевых этикеток:</p>
+        <h2>🔍 LabelSpy 3.0</h2>
+        <p>Профессиональный AI-анализатор пищевых этикеток с поддержкой Google Gemini AI.</p>
         <ul class="feature-list">
-          <li>🔍 <strong>Tesseract OCR</strong> — быстрое локальное распознавание (~85-90%)</li>
-          <li>🤖 <strong>Gemini Vision</strong> — идеальное распознавание (99%, через CORS Proxy)</li>
-          <li>🧭 <strong>AI-аналитика</strong> — автоматическая оценка качества состава</li>
-          <li>🧪 <strong>E-коды</strong> — локальная база данных с оценками</li>
-          <li>⚠️ <strong>Аллергены</strong> — автоматическое определение</li>
-          <li>🍬 <strong>Скрытые сахара</strong> — поиск сиропов и заменителей</li>
-          <li>🚦 <strong>Светофор</strong> — сахар/жир/соль на 100 г</li>
-          <li>🔄 <strong>Сравнение</strong> — сохранение до 5 продуктов</li>
-          <li>💾 <strong>История</strong> — сохранение до 20 анализов</li>
-          <li>✨ <strong>PWA</strong> — работа офлайн</li>
+          <li>🔍 <strong>Tesseract OCR</strong> — локальный, быстрый</li>
+          <li>🤖 <strong>Gemini Vision</strong> — 99% точность</li>
+          <li>🌐 <strong>Multi-Proxy</strong> — работа из России</li>
+          <li>🧭 <strong>AI-аналитика</strong> — умные рекомендации</li>
+          <li>📄 <strong>PDF-отчеты</strong> — генерация и скачивание</li>
+          <li>🚦 <strong>Светофор</strong> — сахар/жир/соль</li>
+          <li>💾 <strong>История</strong> — 20 анализов</li>
+          <li>🔄 <strong>Сравнение</strong> — 5 продуктов</li>
+          <li>📱 <strong>PWA</strong> — офлайн-режим</li>
         </ul>
-        <div class="info-box" style="margin-top: 16px">
-          <span class="info-icon">🌐</span>
-          <span class="info-text"><strong>CORS Proxy:</strong> Gemini API работает через <code>allorigins.win</code> для обхода браузерных ограничений. Если Gemini не работает — используйте Tesseract.</span>
+        <div class="warning-box">
+          <strong>🌐 CORS Proxy:</strong><br>
+          Используется 4 proxy для работы Gemini API из России. Если один не работает — автоматическое переключение на другой.
         </div>
-        <p class="small muted disclaimer">
-          <strong>⚠️ Важно:</strong> Результаты носят информационный характер. Всегда проверяйте оригинальную этикетку.
-        </p>
         <div class="dialog-actions">
-          <button class="btn btn-primary">✅ Закрыть</button>
+          <button class="btn btn-primary">Закрыть</button>
         </div>
       </form>
     </dialog>
 
     <!-- Footer -->
     <div class="footer">
-      <details class="tips" open>
-        <summary><strong>💡 Как использовать LabelSpy 2.2</strong></summary>
-        <ul>
-          <li>📸 Загрузите фото этикетки</li>
-          <li>🔍 <strong>Tesseract</strong> — быстрый (офлайн), <strong>Gemini</strong> — точный (99%)</li>
-          <li>✨ Нажмите <strong>"Анализировать состав"</strong></li>
-          <li>🤖 Получите <strong>AI-анализ от Gemini</strong> + полный разбор</li>
-          <li>💾 Сохраняйте в историю или сравнивайте продукты</li>
-          <li>📱 Установите как PWA на телефон</li>
-        </ul>
+      <details class="tips">
+        <summary><strong>💡 Как использовать</strong></summary>
+        <ol>
+          <li>📸 Загрузи фото этикетки</li>
+          <li>🤖 Нажми <strong>Gemini</strong> для точного OCR</li>
+          <li>✨ <strong>Анализировать</strong> — получи AI-оценку</li>
+          <li>📄 <strong>PDF</strong> — скачай отчет</li>
+        </ol>
       </details>
       <div class="footer-links">
-        <a href="https://github.com/codgorbachev-art/labelspy-demo" target="_blank" rel="noopener noreferrer">⭐ GitHub</a>
+        <a href="https://github.com/codgorbachev-art/labelspy-demo">⭐ GitHub</a>
         <span>•</span>
-        <a href="https://ai.google.dev/gemini-api" target="_blank" rel="noopener noreferrer">🤖 Gemini API</a>
-        <span>•</span>
-        <a href="https://allorigins.win" target="_blank" rel="noopener noreferrer">🌐 CORS Proxy</a>
-        <span>•</span>
-        <span class="muted">v2.2.0</span>
+        <span class="muted">v3.0.0</span>
       </div>
-      <p class="footer-copyright">LabelSpy 2.2 • MIT License • Powered by Tesseract.js & Gemini AI</p>
+      <p class="footer-copyright">LabelSpy 3.0 • Powered by Tesseract & Gemini AI</p>
     </div>
   </div>
 
@@ -269,6 +259,7 @@
     window.__LABELSPY_REPO = 'codgorbachev-art/labelspy-demo';
   </script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
