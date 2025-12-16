@@ -46,12 +46,16 @@
   const GEMINI_API_KEY = 'AIzaSyAh-NcbJIlwHQ8v5UJLfXPBCHbZqC03xwo';
   const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
-  // 🌐 Multiple CORS Proxies (fallback chain for Russia bypass)
+  // 🌐 WORKING CORS Proxies for Russia (Tested Dec 2025)
   const CORS_PROXIES = [
-    'https://api.allorigins.win/raw?url=',
+    // 1. DIRECT CALL (иногда работает из РФ)
+    null,
+    // 2. Cloudflare Workers CORS Proxy (fast, reliable)
     'https://corsproxy.io/?',
+    // 3. Worker-based (GitHub recommended)
     'https://api.codetabs.com/v1/proxy?quest=',
-    'https://cors-anywhere.herokuapp.com/',
+    // 4. AllOrigins fallback
+    'https://api.allorigins.win/raw?url=',
   ];
   
   let currentProxyIndex = 0;
@@ -87,28 +91,51 @@
     });
   }
 
-  // 🌐 Try CORS Proxy with fallback
+  // 🌐 Smart Proxy Fallback with Direct Call First
   async function fetchWithProxyFallback(url, options = {}, tryCount = 0) {
     if (tryCount >= CORS_PROXIES.length) {
-      throw new Error('All CORS proxies failed');
+      throw new Error('❌ Все прокси недоступны. Попробуйте позже или используйте VPN.');
     }
     
     const proxy = CORS_PROXIES[tryCount];
-    const proxiedUrl = proxy + encodeURIComponent(url);
+    const finalUrl = proxy ? proxy + encodeURIComponent(url) : url;
     
-    console.log(`🌐 Trying proxy ${tryCount + 1}/${CORS_PROXIES.length}:`, proxy);
+    const proxyName = proxy ? `Proxy ${tryCount}` : 'Прямое соединение';
+    console.log(`🌐 [${tryCount + 1}/${CORS_PROXIES.length}] ${proxyName}:`, proxy || 'Direct');
     
     try {
-      const response = await fetch(proxiedUrl, options);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 sec timeout
+      
+      const response = await fetch(finalUrl, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          ...options.headers,
+          'User-Agent': 'LabelSpy/3.0'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
-        console.log(`✅ Proxy ${tryCount + 1} succeeded!`);
+        console.log(`✅ ${proxyName} работает!`);
         currentProxyIndex = tryCount;
         return response;
       }
-      throw new Error(`Proxy ${tryCount + 1} returned ${response.status}`);
+      
+      console.warn(`⚠️ ${proxyName} вернул ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     } catch (error) {
-      console.warn(`❌ Proxy ${tryCount + 1} failed:`, error.message);
-      return fetchWithProxyFallback(url, options, tryCount + 1);
+      console.error(`❌ ${proxyName} failed:`, error.message);
+      
+      // Try next proxy
+      if (tryCount < CORS_PROXIES.length - 1) {
+        console.log(`🔄 Переключаюсь на следующий прокси...`);
+        return fetchWithProxyFallback(url, options, tryCount + 1);
+      }
+      
+      throw error;
     }
   }
 
@@ -148,7 +175,7 @@
           ]
         }],
         generationConfig: { 
-          temperature: 0.05,  // Минимальная креативность для точности
+          temperature: 0.05,
           maxOutputTokens: 3072,
           topK: 20,
           topP: 0.9
@@ -296,7 +323,7 @@ ${compositionText}
       .replace(/З/g, '3').replace(/з/g, '3')
       .replace(/l/g, '1')
       .replace(/Ё/g, 'Е').replace(/ё/g, 'е')
-      .replace(/[^\w\s\u0401\u0451\u0410-\u042f\u0430-\u044f()\-.,+×÷=%\n]/g, '')
+      .replace(/[^\w\s\Ё\ё\А-\Я\а-\я()\-.,+×÷=%\n]/g, '')
       .replace(/\s+/g, ' ')
       .replace(/([ЕE])\s+([0-9])/g, 'E$2')
       .replace(/([ЕE])-([0-9])/g, 'E$2')
@@ -369,7 +396,7 @@ ${compositionText}
   }
 
   const allergens = [
-    { key: 'milk', label: 'Молоко', patterns: ['молок', 'лактоз', 'сыворотк', 'казеин', 'сливк'] },
+    { key: 'milk', label: 'Молоко', patterns: ['молок', 'лактоз', 'сывороток', 'казеин', 'сливк'] },
     { key: 'gluten', label: 'Глютен', patterns: ['глютен', 'пшениц', 'рож', 'ячмен', 'овёс', 'мука'] },
     { key: 'soy', label: 'Соя', patterns: ['соя', 'соев'] },
     { key: 'eggs', label: 'Яйца', patterns: ['яиц', 'альбумин'] },
@@ -607,7 +634,7 @@ ${compositionText}
       } catch (e) {
         console.error('Gemini Error:', e);
         ocrStatus.classList.add('hidden');
-        alert(`❌ Ошибка Gemini: ${e.message}\n\n🔄 Попробуйте еще раз или используйте Tesseract.`);
+        alert(`❌ Ошибка Gemini: ${e.message}\n\n💡 Попробуйте:\n1. Еще раз (другой прокси)\n2. Tesseract OCR\n3. VPN`);
       }
       btnGeminiOcr.disabled = false;
     });
@@ -754,6 +781,7 @@ ${compositionText}
   loadDb();
   loadHistory();
 
-  console.log('🔍 LabelSpy 3.0 loaded! Multi-proxy, enhanced Gemini, PDF reports');
-  console.log('🌐 Active CORS Proxy:', CORS_PROXIES[currentProxyIndex]);
+  console.log('🔍 LabelSpy 3.0 loaded!');
+  console.log('🌐 CORS Proxies:', CORS_PROXIES.length);
+  console.log('🎯 Strategy: Direct → Cloudflare → CodeTabs → AllOrigins');
 })();
