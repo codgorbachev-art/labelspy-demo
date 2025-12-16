@@ -2,6 +2,7 @@
   'use strict';
 
   const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
   const fileInput = $('#fileInput');
   const imgPreview = $('#imgPreview');
   const imgPlaceholder = $('#imgPlaceholder');
@@ -31,8 +32,9 @@
   const metricEcodes = $('#metricEcodes');
   const metricAllergens = $('#metricAllergens');
   const metricSugars = $('#metricSugars');
-  const btnShareCard = $('#btnShareCard');
+  const btnGenerateCard = $('#btnGenerateCard');
   const btnSaveToHistory = $('#btnSaveToHistory');
+  const btnCompare = $('#btnCompare');
   const historyBlock = $('#historyBlock');
   const aboutDialog = $('#aboutDialog');
   const btnOpenAbout = $('#btnOpenAbout');
@@ -40,21 +42,22 @@
 
   githubLink.href = 'https://github.com/' + (window.__LABELSPY_REPO || '');
 
-  // 🔑 Google Gemini API Key
-  const GEMINI_API_KEY = 'AIzaSyC3-bwB0vFwdJ3yxpT3Ac4c6hfGPdjQCSs';
+  // 🔑 NEW Google Gemini API Key
+  const GEMINI_API_KEY = 'AIzaSyAh-NcbJIlwHQ8v5UJLfXPBCHbZqC03xwo';
   const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   let eDb = {};
   let lastAnalysis = null;
   let lastImageDataUrl = null;
-  const HISTORY_KEY = 'labelspy_demo_history_v1';
+  const HISTORY_KEY = 'labelspy_v2_history';
+  const COMPARE_KEY = 'labelspy_v2_compare';
 
   async function loadDb() {
     try {
       const res = await fetch('./data/e_additives_ru.json', { cache: 'no-cache' });
       eDb = await res.json();
     } catch (e) {
-      console.error(e);
+      console.error('DB load error:', e);
       eDb = {};
     }
   }
@@ -74,7 +77,7 @@
     });
   }
 
-  // 🤖 GEMINI VISION API: Идеальное распознавание текста
+  // 🤖 GEMINI VISION OCR: Perfect text recognition
   async function recognizeWithGemini(imageDataUrl) {
     try {
       const base64Data = imageDataUrl.split(',')[1];
@@ -86,47 +89,34 @@
         body: JSON.stringify({
           contents: [{
             parts: [
-              {
-                text: `Ты - эксперт по распознаванию текста с пищевых этикеток. Распознай ВСЕ текст с этой этикетки продукта. Требования:
+              { text: `Ты эксперт по распознаванию пищевых этикеток. Распознай ВЕСЬ текст с этой этикетки максимально точно.
 
-1. Верни ТОЛЬКО распознанный текст, БЕЗ комментариев
-2. Сохраняй структуру: "Состав:", "Пищевая ценность:", "Энергетическая ценность:"
+Требования:
+1. Верни ТОЛЬКО распознанный текст БЕЗ комментариев
+2. Сохраняй структуру: "Состав:", "Пищевая ценность:"
 3. E-коды пиши как E621, E330 (без пробелов)
-4. Числа с единицами: "15г", "8г", "0.5г" (без пробела между числом и "г")
-5. Если видишь нечеткий текст - делай лучшее предположение
-6. НЕ добавляй пояснения типа "Вот распознанный текст:"
+4. Числа с единицами: "15г", "8г" (без пробела)
+5. Если текст нечеткий - делай лучшее предположение
+6. НЕ добавляй пояснения
 
-Просто распознай текст максимально точно.`
-              },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64Data
-                }
-              }
+Просто распознай текст точно.` },
+              { inline_data: { mime_type: mimeType, data: base64Data } }
             ]
           }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 2048
-          }
+          generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
       const data = await response.json();
-      const text = data.candidates[0].content.parts[0].text;
-      return text.trim();
+      return data.candidates[0].content.parts[0].text.trim();
     } catch (error) {
       console.error('Gemini OCR error:', error);
       throw error;
     }
   }
 
-  // 🤖 GEMINI ANALYTICS: AI-анализ состава
+  // 🤖 GEMINI ANALYTICS: AI-powered composition analysis
   async function analyzeWithGemini(compositionText) {
     try {
       const response = await fetch(GEMINI_API_URL, {
@@ -134,10 +124,9 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{
-            parts: [{
-              text: `Ты - эксперт-нутрициолог. Проанализируй состав продукта и дай краткую оценку (2-3 предложения).
+            parts: [{ text: `Ты эксперт-нутрициолог. Проанализируй состав продукта и дай краткую оценку (2-3 предложения).
 
-Состав продукта:
+Состав:
 ${compositionText}
 
 Оцени:
@@ -146,20 +135,13 @@ ${compositionText}
 3. Аллергены (молоко, глютен, соя)
 4. Общее качество продукта
 
-Ответ дай КРАТКО, БЕЗ списков, простым языком для обычного покупателя.`
-            }]
+Ответ дай КРАТКО, простым языком для обычного покупателя.` }]
           }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 300
-          }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 300 }
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
       const data = await response.json();
       return data.candidates[0].content.parts[0].text.trim();
     } catch (error) {
@@ -168,14 +150,56 @@ ${compositionText}
     }
   }
 
-  // 🎯 Advanced Image Preprocessing (for Tesseract)
+  // 🎨 GEMINI CARD GENERATION: Beautiful AI-generated analysis card
+  async function generateCardWithGemini(analysis) {
+    try {
+      const { ecodes, allergens, sugars, nutrients, composition } = analysis;
+      const prompt = `Создай красивое HTML-описание анализа продукта для веб-карточки.
+
+Данные:
+- E-коды: ${ecodes.join(', ') || 'не обнаружены'}
+- Аллергены: ${allergens.join(', ') || 'не обнаружены'}
+- Скрытые сахара: ${sugars.join(', ') || 'не обнаружены'}
+- Сахар: ${nutrients.sugar || '—'}г, Жир: ${nutrients.fat || '—'}г, Соль: ${nutrients.salt || '—'}г
+- Состав: ${composition || '—'}
+
+Требования:
+1. Верни ТОЛЬКО HTML-код (без markdown, без \`\`\`)
+2. Используй <div>, <p>, <strong>, <span>
+3. Добавь emoji для визуала
+4. Структура: заголовок → краткий анализ → рекомендация
+5. Стиль: font-size:14px, line-height:1.6, цвета rgb(231,238,252)
+6. Максимум 200 слов
+
+Верни ТОЛЬКО чистый HTML без обёртки.`;
+
+      const response = await fetch(GEMINI_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.8, maxOutputTokens: 500 }
+        })
+      });
+
+      if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+      const data = await response.json();
+      let html = data.candidates[0].content.parts[0].text.trim();
+      html = html.replace(/```html\n?/g, '').replace(/```\n?/g, '').trim();
+      return html;
+    } catch (error) {
+      console.error('Gemini card error:', error);
+      return '<div>❌ Ошибка генерации карточки</div>';
+    }
+  }
+
+  // 🎨 Advanced Image Preprocessing
   async function preprocessImage(imageDataUrl) {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        
         canvas.width = img.width * 4;
         canvas.height = img.height * 4;
         ctx.imageSmoothingEnabled = true;
@@ -185,15 +209,14 @@ ${compositionText}
         let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         let data = imageData.data;
         
-        // OTSU Threshold
+        // OTSU Adaptive Threshold
         let histogram = new Array(256).fill(0);
         for (let i = 0; i < data.length; i += 4) {
           const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
           histogram[Math.round(gray)]++;
         }
         
-        let sum = 0, sumB = 0, wB = 0, wF = 0;
-        let mB, mF, max = 0, between, threshold = 128;
+        let sum = 0, sumB = 0, wB = 0, wF = 0, mB, mF, max = 0, between, threshold = 128;
         for (let t = 0; t < 256; t++) {
           wB += histogram[t];
           if (wB === 0) continue;
@@ -203,10 +226,7 @@ ${compositionText}
           mB = sumB / wB;
           mF = (sum - sumB) / wF;
           between = wB * wF * Math.pow((mB - mF), 2);
-          if (between > max) {
-            max = between;
-            threshold = t;
-          }
+          if (between > max) { max = between; threshold = t; }
         }
         
         let minGray = 255, maxGray = 0;
@@ -253,10 +273,6 @@ ${compositionText}
       .trim();
   }
 
-  function normalizeSpaces(s) {
-    return (s || '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
-  }
-
   function normalizeEcode(raw) {
     if (!raw) return null;
     let x = raw.toUpperCase().replace(/[ЕE]/g, 'E').replace(/[ОO0]/g, '0');
@@ -279,7 +295,7 @@ ${compositionText}
   }
 
   function extractCompositionBlock(rawText) {
-    const text = normalizeSpaces(rawText);
+    const text = (rawText || '').replace(/\s+/g, ' ').trim();
     if (!text) return '';
     const lower = text.toLowerCase();
     const markers = ['состав:', 'состав -', 'ингредиенты:'];
@@ -296,7 +312,7 @@ ${compositionText}
       const idx = cutLower.indexOf(s);
       if (idx !== -1 && idx < stopPos) stopPos = idx;
     }
-    return normalizeSpaces(cut.slice(0, stopPos));
+    return cut.slice(0, stopPos).trim();
   }
 
   function autoExtractNutrients(text) {
@@ -317,8 +333,8 @@ ${compositionText}
   }
 
   const allergens = [
-    { key: 'milk', label: 'Молоко / лактоза', patterns: ['молок', 'лактоз', 'сыворотк', 'казеин', 'сливк'] },
-    { key: 'gluten', label: 'Глютен / злаки', patterns: ['глютен', 'пшениц', 'рож', 'ячмен', 'овёс', 'мука'] },
+    { key: 'milk', label: 'Молоко', patterns: ['молок', 'лактоз', 'сыворотк', 'казеин', 'сливк'] },
+    { key: 'gluten', label: 'Глютен', patterns: ['глютен', 'пшениц', 'рож', 'ячмен', 'овёс', 'мука'] },
     { key: 'soy', label: 'Соя', patterns: ['соя', 'соев'] },
     { key: 'eggs', label: 'Яйца', patterns: ['яиц', 'альбумин'] },
     { key: 'nuts', label: 'Орехи', patterns: ['орех', 'миндал', 'фундук', 'арахис'] },
@@ -379,9 +395,9 @@ ${compositionText}
     const penalty = (lvl) => lvl === 'red' ? 25 : (lvl === 'yellow' ? 10 : 0);
     score -= penalty(tl.sugar.level) + penalty(tl.fat.level) + penalty(tl.salt.level);
     score = Math.max(0, Math.min(100, score));
-    if (score >= 75) return { color: 'green', title: 'Зелёная зона', body: 'Достаточно нейтральный состав, мало "красных" сигналов.' };
-    if (score >= 45) return { color: 'yellow', title: 'Жёлтая зона', body: 'Есть факторы внимания. Рекомендуется умеренность.' };
-    return { color: 'red', title: 'Красная зона', body: 'Много факторов внимания. Для регулярного употребления лучше сравнить с альтернативами.' };
+    if (score >= 75) return { color: 'green', title: '✅ Зелёная зона', body: 'Достаточно нейтральный состав, мало "красных" сигналов.' };
+    if (score >= 45) return { color: 'yellow', title: '⚠️ Жёлтая зона', body: 'Есть факторы внимания. Рекомендуется умеренность.' };
+    return { color: 'red', title: '🚫 Красная зона', body: 'Много факторов внимания. Для регулярного употребления лучше сравнить с альтернативами.' };
   }
 
   function setVerdict(v) {
@@ -389,6 +405,40 @@ ${compositionText}
     overallVerdict.classList.add('verdict-' + v.color);
     overallTitle.textContent = v.title;
     overallBody.textContent = v.body;
+  }
+
+  // 📊 Save to comparison
+  function saveToComparison() {
+    if (!lastAnalysis) return;
+    let compare = JSON.parse(localStorage.getItem(COMPARE_KEY) || '[]');
+    const item = { ...lastAnalysis, timestamp: Date.now(), id: Date.now() };
+    compare.push(item);
+    if (compare.length > 5) compare = compare.slice(-5);
+    localStorage.setItem(COMPARE_KEY, JSON.stringify(compare));
+    alert('✅ Добавлено в сравнение!');
+  }
+
+  // 📜 Load history
+  function loadHistory() {
+    const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const historyContent = $('#historyContent');
+    if (history.length === 0) {
+      historyBlock.classList.add('hidden');
+      return;
+    }
+    historyBlock.classList.remove('hidden');
+    historyContent.innerHTML = history.slice(0, 5).map((item, idx) => `
+      <div class="history-item">
+        <div class="history-header">
+          <strong>📊 Анализ #${history.length - idx}</strong>
+          <span class="muted small">${new Date(item.timestamp).toLocaleDateString('ru')}</span>
+        </div>
+        <div class="history-body">
+          <span class="pill pill-${item.verdict?.color || 'unknown'}">${item.verdict?.title || 'Н/Д'}</span>
+          <span class="muted small">E-коды: ${item.ecodes?.length || 0}, Аллергены: ${item.allergens?.length || 0}</span>
+        </div>
+      </div>
+    `).join('');
   }
 
   fileInput.addEventListener('change', async (e) => {
@@ -422,9 +472,9 @@ ${compositionText}
       setOcrProgress(1, '✅ Готово!');
       setTimeout(() => ocrStatus.classList.add('hidden'), 500);
     } catch (e) {
-      console.error(e);
+      console.error('OCR Error:', e);
       ocrStatus.classList.add('hidden');
-      alert('Ошибка OCR. Попробуйте ещё раз.');
+      alert('❌ Ошибка OCR. Попробуйте ещё раз.');
     }
     btnOcr.disabled = false;
   });
@@ -445,9 +495,9 @@ ${compositionText}
         setOcrProgress(1, '✅ Gemini распознал идеально!');
         setTimeout(() => ocrStatus.classList.add('hidden'), 500);
       } catch (e) {
-        console.error(e);
+        console.error('Gemini Error:', e);
         ocrStatus.classList.add('hidden');
-        alert('Ошибка Gemini API. Проверьте ключ или попробуйте обычный OCR.');
+        alert('❌ Ошибка Gemini API. Проверьте ключ или используйте Tesseract.');
       }
       btnGeminiOcr.disabled = false;
     });
@@ -479,20 +529,20 @@ ${compositionText}
     setPill(tlFat, tl_fat.level, tl_fat.label);
     setPill(tlSalt, tl_salt.level, tl_salt.label);
 
-    lastAnalysis = { ecodes, allergens: allergens_found, sugars: hidden_sugars, nutrients };
-
     const eItems = ecodes.map(code => eDb[code] || { name_ru: code, attention: 'неизвестно' });
     const verdict = computeOverallVerdict(eItems, allergens_found, hidden_sugars, { sugar: tl_sugar, fat: tl_fat, salt: tl_salt });
     setVerdict(verdict);
+
+    lastAnalysis = { ecodes, allergens: allergens_found, sugars: hidden_sugars, nutrients, composition: compositionBlock, verdict, timestamp: Date.now() };
 
     metricEcodes.textContent = ecodes.length;
     metricAllergens.textContent = allergens_found.length;
     metricSugars.textContent = hidden_sugars.length;
     compositionSnippet.textContent = compositionBlock || '—';
 
-    // 🤖 GEMINI AI АНАЛИЗ
+    // 🤖 AI Analysis
     if (compositionBlock) {
-      const aiAnalysis = document.getElementById('aiAnalysis');
+      const aiAnalysis = $('#aiAnalysis');
       if (aiAnalysis) {
         aiAnalysis.classList.remove('hidden');
         aiAnalysis.innerHTML = '<div class="pill pill-yellow">⏳ Анализирую состав с помощью AI...</div>';
@@ -510,12 +560,12 @@ ${compositionText}
 
     if (allergens_found.length > 0) {
       allergensBlock.classList.remove('hidden');
-      document.getElementById('allergensContent').innerHTML = allergens_found.map(a => `<span class="pill pill-high">${a}</span>`).join('');
+      $('#allergensContent').innerHTML = allergens_found.map(a => `<span class="pill pill-high">${a}</span>`).join('');
     }
 
     if (hidden_sugars.length > 0) {
-      document.getElementById('sugarsBlock').classList.remove('hidden');
-      document.getElementById('sugarsContent').innerHTML = hidden_sugars.map(s => `<span class="pill pill-yellow">${s}</span>`).join('');
+      $('#sugarsBlock').classList.remove('hidden');
+      $('#sugarsContent').innerHTML = hidden_sugars.map(s => `<span class="pill pill-yellow">${s}</span>`).join('');
     }
 
     if (ecodes.length > 0) {
@@ -532,6 +582,7 @@ ${compositionText}
     }
 
     results.classList.remove('hidden');
+    loadHistory();
   });
 
   btnClear.addEventListener('click', () => {
@@ -552,35 +603,73 @@ ${compositionText}
     setPill(tlSalt, tl_salt.level, tl_salt.label);
   });
 
-  btnShareCard.addEventListener('click', async () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 400;
-    canvas.height = 300;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#0b1320';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#e7eefc';
-    ctx.font = 'bold 20px Arial';
-    ctx.fillText('LabelSpy Analysis', 20, 40);
-    ctx.font = '14px Arial';
-    ctx.fillText(`E-codes: ${metricEcodes.textContent}`, 20, 80);
-    ctx.fillText(`Allergens: ${metricAllergens.textContent}`, 20, 110);
-    ctx.fillText(`Hidden sugars: ${metricSugars.textContent}`, 20, 140);
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL();
-    link.download = 'labelspy-analysis.png';
-    link.click();
-  });
+  // 🎨 Generate Beautiful Card with Gemini
+  if (btnGenerateCard) {
+    btnGenerateCard.addEventListener('click', async () => {
+      if (!lastAnalysis) return;
+      btnGenerateCard.disabled = true;
+      btnGenerateCard.textContent = '⏳ Генерация...';
+      
+      try {
+        const html = await generateCardWithGemini(lastAnalysis);
+        const cardDialog = $('#cardDialog') || document.createElement('dialog');
+        cardDialog.id = 'cardDialog';
+        cardDialog.className = 'dialog card-dialog';
+        cardDialog.innerHTML = `
+          <form method="dialog">
+            <div class="card-preview">${html}</div>
+            <div class="dialog-actions">
+              <button class="btn btn-secondary" id="btnDownloadCard">📥 Скачать PNG</button>
+              <button class="btn btn-primary">Закрыть</button>
+            </div>
+          </form>
+        `;
+        if (!$('#cardDialog')) document.body.appendChild(cardDialog);
+        cardDialog.showModal();
+        
+        $('#btnDownloadCard')?.addEventListener('click', async () => {
+          const cardPreview = $('.card-preview');
+          if (cardPreview && typeof html2canvas !== 'undefined') {
+            const canvas = await html2canvas(cardPreview);
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL();
+            link.download = 'labelspy-card.png';
+            link.click();
+          } else {
+            alert('📷 Скачивание пока недоступно. Сделайте скриншот вручную.');
+          }
+        });
+      } catch (e) {
+        console.error('Card generation error:', e);
+        alert('❌ Ошибка генерации карточки');
+      }
+      
+      btnGenerateCard.disabled = false;
+      btnGenerateCard.textContent = '🎨 Сгенерировать карточку AI';
+    });
+  }
 
-  btnOpenAbout.addEventListener('click', () => aboutDialog.showModal());
-  btnSaveToHistory.addEventListener('click', () => {
-    if (!lastAnalysis) return;
-    let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-    history.unshift({ ...lastAnalysis, timestamp: new Date().toISOString() });
-    if (history.length > 10) history = history.slice(0, 10);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    alert('Сохранено в историю!');
-  });
+  if (btnSaveToHistory) {
+    btnSaveToHistory.addEventListener('click', () => {
+      if (!lastAnalysis) return;
+      let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      history.unshift({ ...lastAnalysis, timestamp: Date.now() });
+      if (history.length > 20) history = history.slice(0, 20);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      alert('✅ Сохранено в историю!');
+      loadHistory();
+    });
+  }
 
+  if (btnCompare) {
+    btnCompare.addEventListener('click', saveToComparison);
+  }
+
+  if (btnOpenAbout) {
+    btnOpenAbout.addEventListener('click', () => aboutDialog.showModal());
+  }
+
+  // Initialize
   loadDb();
+  loadHistory();
 })();
