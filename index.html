@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="LabelSpy Demo — анализ состава продуктов питания с Google Gemini Vision + Tesseract OCR, E-коды, аллергены, AI-аналитика" />
+  <meta name="description" content="LabelSpy 2.0 — AI-анализ пищевых этикеток с Google Gemini Vision. Распознавание текста, E-коды, аллергены, сравнение продуктов" />
   <meta name="theme-color" content="#0b1320" />
-  <title>LabelSpy Demo — AI Анализ этикеток продуктов</title>
+  <title>LabelSpy 2.0 — AI Анализ Этикеток</title>
   <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='90' fill='%232dd4bf'/><text x='96' y='120' font-size='80' font-weight='bold' text-anchor='middle' fill='%230b1320'>L</text></svg>" />
+  <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='90' fill='%2360a5fa'/><text x='96' y='130' font-size='90' font-weight='bold' text-anchor='middle' fill='%230b1320'>🔍</text></svg>" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -17,8 +17,8 @@
         <div class="brand">
           <div class="brand-dot"></div>
           <div>
-            <div class="brand-title">LabelSpy 🤖</div>
-            <div class="brand-subtitle">Demo: AI-анализ состава продуктов</div>
+            <div class="brand-title">LabelSpy 2.0 🤖</div>
+            <div class="brand-subtitle">AI-анализ пищевых этикеток</div>
           </div>
         </div>
         <div class="header-actions">
@@ -31,13 +31,13 @@
 
   <div class="container">
     <!-- OCR & Input Section -->
-    <div class="card">
-      <h2>📸 Шаг 1: Захват состава (OCR или ввод вручную)</h2>
+    <div class="card glass-card">
+      <h2>📸 Шаг 1: Захват состава</h2>
       
       <div class="upload">
         <p class="muted small">Загрузите фото этикетки продукта или вставьте текст состава вручную</p>
         <input type="file" id="fileInput" accept="image/*" />
-        <div class="upload-help">PNG, JPG, WebP. До 5 MB. OCR работает в браузере (нет отправки на сервер).</div>
+        <div class="upload-help">PNG, JPG, WebP. До 5 MB. OCR работает в браузере + Gemini API.</div>
       </div>
 
       <div class="preview-row">
@@ -54,16 +54,22 @@
             <select id="ocrLang">
               <option value="rus">Русский</option>
               <option value="eng">English</option>
-              <option value="rus+eng">Русский + English</option>
+              <option value="rus+eng" selected>Русский + English</option>
             </select>
           </div>
           
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px">
-            <button class="btn btn-primary" id="btnOcr" disabled>🔍 Tesseract OCR</button>
-            <button class="btn btn-secondary" id="btnGeminiOcr" disabled style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white">🤖 Gemini Vision</button>
+          <div class="ocr-buttons">
+            <button class="btn btn-primary" id="btnOcr" disabled>
+              <span class="btn-icon">🔍</span>
+              <span>Tesseract OCR</span>
+            </button>
+            <button class="btn btn-gemini" id="btnGeminiOcr" disabled>
+              <span class="btn-icon">🤖</span>
+              <span>Gemini Vision</span>
+            </button>
           </div>
           
-          <button class="btn btn-secondary" id="btnUseSample" style="margin-top: 8px">Использовать пример</button>
+          <button class="btn btn-secondary" id="btnUseSample">📋 Использовать пример</button>
           
           <div id="ocrStatus" class="progress hidden">
             <div class="progress-row">
@@ -80,7 +86,10 @@
         <label class="field-label">Текст состава (можно отредактировать)</label>
         <textarea class="textarea" id="textInput" placeholder="Состав будет выведен сюда или вставьте вручную..."></textarea>
         <div class="inline-actions">
-          <button class="btn btn-primary" id="btnAnalyze">✅ Анализировать состав</button>
+          <button class="btn btn-primary btn-lg" id="btnAnalyze">
+            <span class="btn-icon">✨</span>
+            <span>Анализировать состав</span>
+          </button>
           <button class="btn btn-secondary" id="btnClear">🗑️ Очистить</button>
         </div>
       </div>
@@ -88,17 +97,21 @@
 
     <!-- Results Section -->
     <div id="results" class="hidden">
-      <div class="card">
+      <div class="card glass-card">
         <div class="results-header">
           <h2>📊 Результаты анализа</h2>
           <div class="results-actions">
-            <button class="btn btn-secondary" id="btnShareCard">📥 Скачать карточку</button>
+            <button class="btn btn-gemini" id="btnGenerateCard">
+              <span class="btn-icon">🎨</span>
+              <span>Сгенерировать карточку AI</span>
+            </button>
+            <button class="btn btn-secondary" id="btnCompare">🔄 Добавить в сравнение</button>
             <button class="btn btn-secondary" id="btnSaveToHistory">💾 В историю</button>
           </div>
         </div>
 
         <!-- AI Analysis Block -->
-        <div id="aiAnalysis" class="hidden" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius: 8px; padding: 16px; margin-bottom: 16px; border: 1px solid #667eea30">
+        <div id="aiAnalysis" class="hidden ai-analysis-card">
           <div class="pill pill-yellow">⏳ Анализирую состав с помощью AI...</div>
         </div>
 
@@ -106,78 +119,79 @@
         <div id="overallVerdict" class="verdict verdict-green">
           <div class="verdict-title" id="overallTitle">Анализ…</div>
           <div class="verdict-body" id="overallBody">Ждём результатов…</div>
-          <div class="mini-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 12px">
+          <div class="mini-grid">
             <div class="mini-card">
+              <div class="mini-icon">🧪</div>
               <div class="mini-title">E-коды</div>
               <div class="mini-value" id="metricEcodes">0</div>
             </div>
             <div class="mini-card">
+              <div class="mini-icon">⚠️</div>
               <div class="mini-title">Аллергены</div>
               <div class="mini-value" id="metricAllergens">0</div>
             </div>
             <div class="mini-card">
-              <div class="mini-title">Скрытые сахара</div>
+              <div class="mini-icon">🍭</div>
+              <div class="mini-title">Скр. сахара</div>
               <div class="mini-value" id="metricSugars">0</div>
             </div>
           </div>
         </div>
 
         <!-- E-codes Table -->
-        <div id="ecodesTable" class="table hidden" style="margin-top: 16px">
-          <div style="padding: 10px; text-align: center; color: var(--muted)">Таблица E-кодов</div>
-        </div>
+        <div id="ecodesTable" class="table hidden"></div>
 
         <!-- Allergens -->
-        <div id="allergensBlock" class="hidden" style="margin-top: 16px">
+        <div id="allergensBlock" class="hidden alert-block">
           <h3>⚠️ Возможные аллергены</h3>
-          <div id="allergensContent" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;"></div>
+          <div id="allergensContent" class="pills-row"></div>
         </div>
 
         <!-- Hidden Sugars -->
-        <div id="sugarsBlock" class="hidden" style="margin-top: 16px">
-          <h3>🍬 Скрытые сахара (эвристика)</h3>
-          <div id="sugarsContent" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;"></div>
+        <div id="sugarsBlock" class="hidden alert-block">
+          <h3>🍬 Скрытые сахара</h3>
+          <div id="sugarsContent" class="pills-row"></div>
         </div>
 
         <!-- Composition Snippet -->
-        <div style="margin-top: 16px">
-          <h3>Распознанный состав</h3>
+        <div class="composition-block">
+          <h3>📋 Распознанный состав</h3>
           <div id="compositionSnippet" class="snippet">—</div>
         </div>
 
         <!-- Nutrients & Traffic Light -->
-        <div style="margin-top: 16px">
-          <h3>🚦 Светофор: Сахар / Жир / Соль (на 100 г)</h3>
-          <p class="small muted">Введите значения из этикетки (или они уже распознаны выше). Таблица внизу показывает оценку.</p>
+        <div class="nutrients-section">
+          <h3>🚦 Светофор: Сахар / Жир / Соль</h3>
+          <p class="small muted">Введите значения из этикетки (или они уже распознаны).</p>
           
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px">
+          <div class="nutrients-grid">
             <div class="field">
-              <label class="field-label">Сахар (г/100г)</label>
+              <label class="field-label">🍭 Сахар (г/100г)</label>
               <input type="number" id="nutrSugar" placeholder="0" step="0.1" />
             </div>
             <div class="field">
-              <label class="field-label">Жир (г/100г)</label>
+              <label class="field-label">🧈 Жир (г/100г)</label>
               <input type="number" id="nutrFat" placeholder="0" step="0.1" />
             </div>
             <div class="field">
-              <label class="field-label">Соль (г/100г)</label>
+              <label class="field-label">🧂 Соль (г/100г)</label>
               <input type="number" id="nutrSalt" placeholder="0" step="0.1" />
             </div>
           </div>
           
-          <button class="btn btn-primary" id="btnRecalc" style="margin-top: 10px">Пересчитать светофор</button>
+          <button class="btn btn-primary" id="btnRecalc">♻️ Пересчитать</button>
 
-          <div class="traffic" style="margin-top: 16px">
+          <div class="traffic">
             <div class="traffic-item">
-              <div class="traffic-label">Сахар</div>
+              <div class="traffic-label">🍭 Сахар</div>
               <div id="tlSugar" class="pill pill-unknown">—</div>
             </div>
             <div class="traffic-item">
-              <div class="traffic-label">Жир</div>
+              <div class="traffic-label">🧈 Жир</div>
               <div id="tlFat" class="pill pill-unknown">—</div>
             </div>
             <div class="traffic-item">
-              <div class="traffic-label">Соль</div>
+              <div class="traffic-label">🧂 Соль</div>
               <div id="tlSalt" class="pill pill-unknown">—</div>
             </div>
           </div>
@@ -185,30 +199,33 @@
       </div>
 
       <!-- History -->
-      <div id="historyBlock" class="card hidden">
+      <div id="historyBlock" class="card glass-card hidden">
         <h2>📜 История анализов</h2>
-        <div id="historyContent" style="display: flex; flex-direction: column; gap: 10px"></div>
+        <div id="historyContent" class="history-list"></div>
       </div>
     </div>
 
     <!-- About Dialog -->
     <dialog id="aboutDialog" class="dialog">
       <form method="dialog">
-        <h2>О LabelSpy Demo</h2>
-        <p>Это демонстрационный прототип веб‑приложения для анализа состава продуктов питания:</p>
-        <ul style="color: var(--muted)">
-          <li><strong>Dual OCR</strong>: Tesseract.js (в браузере) + <strong>Google Gemini Vision API</strong> (идеальное распознавание).</li>
-          <li><strong>AI-аналитика</strong> с помощью Gemini: автоматическая оценка качества состава.</li>
-          <li><strong>E‑коды</strong> ищутся в локальной демо‑базе данных.</li>
-          <li><strong>Аллергены</strong> определяются по простым эвристикам.</li>
-          <li><strong>Светофор</strong> показывает уровень сахара/жира/соли на 100 г.</li>
-          <li><strong>PWA</strong> работает офлайн (кеширует локальные файлы).</li>
+        <h2>🔍 О LabelSpy 2.0</h2>
+        <p>Профессиональное веб-приложение для AI-анализа пищевых этикеток:</p>
+        <ul class="feature-list">
+          <li>🤖 <strong>Google Gemini Vision API</strong> — идеальное распознавание текста (99% точность)</li>
+          <li>🔍 <strong>Tesseract OCR</strong> — локальное распознавание в браузере</li>
+          <li>🧭 <strong>AI-аналитика</strong> — автоматическая оценка качества состава</li>
+          <li>🎨 <strong>Красивые карточки</strong> — генерация через Gemini API</li>
+          <li>🔄 <strong>Сравнение продуктов</strong> — сохранение до 5 продуктов</li>
+          <li>🧪 <strong>E-коды</strong> — локальная база данных</li>
+          <li>🚦 <strong>Светофор</strong> — сахар/жир/соль на 100 г</li>
+          <li>💾 <strong>История</strong> — сохранение до 20 анализов</li>
+          <li>✨ <strong>PWA</strong> — работа офлайн</li>
         </ul>
-        <p class="small muted" style="margin-top: 14px">
-          <strong>⚠️ Важно:</strong> результаты носят информационный характер и не являются медицинской рекомендацией. Всегда проверяйте оригинальную этикетку.
+        <p class="small muted disclaimer">
+          <strong>⚠️ Важно:</strong> Результаты носят информационный характер. Всегда проверяйте оригинальную этикетку.
         </p>
         <div class="dialog-actions">
-          <button class="btn btn-primary">Закрыть</button>
+          <button class="btn btn-primary">✅ Закрыть</button>
         </div>
       </form>
     </dialog>
@@ -216,29 +233,35 @@
     <!-- Footer -->
     <div class="footer">
       <details class="tips" open>
-        <summary><strong>💡 Советы</strong></summary>
+        <summary><strong>💡 Как использовать LabelSpy 2.0</strong></summary>
         <ul>
-          <li>🤖 <strong>Gemini Vision OCR</strong> — идеальное распознавание текста через Google AI (99% точность).</li>
-          <li>🔍 <strong>Tesseract OCR</strong> — локальное распознавание в браузере (без API).</li>
-          <li>Хорошего качества фото этикетки улучшит распознавание OCR.</li>
-          <li>Если OCR ошибся — отредактируйте текст вручную в поле выше.</li>
-          <li>Данные сохраняются локально в браузере (localStorage).</li>
-          <li><a href="https://github.com/codgorbachev-art/labelspy-demo" target="_blank" rel="noopener noreferrer">GitHub репозиторий</a></li>
+          <li>🤖 <strong>Gemini Vision</strong> — идеальное распознавание даже сложных этикеток</li>
+          <li>🔍 <strong>Tesseract</strong> — быстрое офлайн распознавание</li>
+          <li>🎨 <strong>Генерация карточек</strong> — красивые карточки для соцсетей</li>
+          <li>🔄 <strong>Сравнение</strong> — сохраняйте и сравнивайте до 5 продуктов</li>
+          <li>💾 <strong>История</strong> — все ваши анализы сохраняются локально</li>
+          <li>📱 <strong>PWA</strong> — установите как приложение на телефон</li>
         </ul>
       </details>
-      <p style="margin-top: 14px">LabelSpy Demo • MIT License • v0.2.0 + Gemini AI</p>
+      <div class="footer-links">
+        <a href="https://github.com/codgorbachev-art/labelspy-demo" target="_blank" rel="noopener noreferrer">⭐ GitHub</a>
+        <span>•</span>
+        <a href="https://ai.google.dev/gemini-api" target="_blank" rel="noopener noreferrer">🤖 Gemini API</a>
+        <span>•</span>
+        <span class="muted">v2.0.0</span>
+      </div>
+      <p class="footer-copyright">LabelSpy 2.0 • MIT License • Powered by Gemini AI</p>
     </div>
   </div>
 
   <script>
-    // Register service worker for PWA
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js').catch(err => console.warn('SW:', err));
     }
-    // Set repo link
     window.__LABELSPY_REPO = 'codgorbachev-art/labelspy-demo';
   </script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
