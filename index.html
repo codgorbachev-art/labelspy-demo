@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="LabelSpy 2.0 — AI-анализ пищевых этикеток с Google Gemini Vision. Распознавание текста, E-коды, аллергены, сравнение продуктов" />
+  <meta name="description" content="LabelSpy 2.0 — AI-анализ пищевых этикеток с Tesseract OCR и Google Gemini. Распознавание текста, E-коды, аллергены, сравнение продуктов" />
   <meta name="theme-color" content="#0b1320" />
   <title>LabelSpy 2.0 — AI Анализ Этикеток</title>
   <link rel="manifest" href="./manifest.webmanifest" />
@@ -37,7 +37,7 @@
       <div class="upload">
         <p class="muted small">Загрузите фото этикетки продукта или вставьте текст состава вручную</p>
         <input type="file" id="fileInput" accept="image/*" />
-        <div class="upload-help">PNG, JPG, WebP. До 5 MB. OCR работает в браузере + Gemini API.</div>
+        <div class="upload-help">PNG, JPG, WebP. До 5 MB. <strong>Рекомендуется Tesseract OCR</strong> (работает в браузере без API).</div>
       </div>
 
       <div class="preview-row">
@@ -63,10 +63,15 @@
               <span class="btn-icon">🔍</span>
               <span>Tesseract OCR</span>
             </button>
-            <button class="btn btn-gemini" id="btnGeminiOcr" disabled>
+            <button class="btn btn-gemini" id="btnGeminiOcr" disabled title="⚠️ Может не работать из-за CORS. Используйте Tesseract.">
               <span class="btn-icon">🤖</span>
               <span>Gemini Vision</span>
             </button>
+          </div>
+          
+          <div class="info-box">
+            <span class="info-icon">ℹ️</span>
+            <span class="info-text"><strong>Tesseract OCR</strong> — работает локально в браузере. <br><strong>Gemini</strong> — может быть заблокирован браузером (CORS).</span>
           </div>
           
           <button class="btn btn-secondary" id="btnUseSample">📋 Использовать пример</button>
@@ -211,8 +216,8 @@
         <h2>🔍 О LabelSpy 2.0</h2>
         <p>Профессиональное веб-приложение для AI-анализа пищевых этикеток:</p>
         <ul class="feature-list">
-          <li>🤖 <strong>Google Gemini Vision API</strong> — идеальное распознавание текста (99% точность)</li>
-          <li>🔍 <strong>Tesseract OCR</strong> — локальное распознавание в браузере</li>
+          <li>🔍 <strong>Tesseract OCR</strong> — локальное распознавание в браузере (рекомендуется)</li>
+          <li>🤖 <strong>Google Gemini Vision API</strong> — идеальное распознавание (может не работать из-за CORS)</li>
           <li>🧭 <strong>AI-аналитика</strong> — автоматическая оценка качества состава</li>
           <li>🎨 <strong>Красивые карточки</strong> — генерация через Gemini API</li>
           <li>🔄 <strong>Сравнение продуктов</strong> — сохранение до 5 продуктов</li>
@@ -221,6 +226,10 @@
           <li>💾 <strong>История</strong> — сохранение до 20 анализов</li>
           <li>✨ <strong>PWA</strong> — работа офлайн</li>
         </ul>
+        <div class="warning-box">
+          <strong>⚠️ Важно про CORS:</strong><br>
+Gemini API может быть заблокирован браузером из-за CORS-ограничений. Рекомендуем использовать <strong>Tesseract OCR</strong>, который работает полностью локально в браузере.
+        </div>
         <p class="small muted disclaimer">
           <strong>⚠️ Важно:</strong> Результаты носят информационный характер. Всегда проверяйте оригинальную этикетку.
         </p>
@@ -235,8 +244,8 @@
       <details class="tips" open>
         <summary><strong>💡 Как использовать LabelSpy 2.0</strong></summary>
         <ul>
-          <li>🤖 <strong>Gemini Vision</strong> — идеальное распознавание даже сложных этикеток</li>
-          <li>🔍 <strong>Tesseract</strong> — быстрое офлайн распознавание</li>
+          <li>🔍 <strong>Tesseract OCR</strong> (рекомендуется) — быстрое офлайн распознавание в браузере</li>
+          <li>🤖 <strong>Gemini Vision</strong> — идеальное распознавание (может не работать из-за CORS)</li>
           <li>🎨 <strong>Генерация карточек</strong> — красивые карточки для соцсетей</li>
           <li>🔄 <strong>Сравнение</strong> — сохраняйте и сравнивайте до 5 продуктов</li>
           <li>💾 <strong>История</strong> — все ваши анализы сохраняются локально</li>
@@ -248,9 +257,9 @@
         <span>•</span>
         <a href="https://ai.google.dev/gemini-api" target="_blank" rel="noopener noreferrer">🤖 Gemini API</a>
         <span>•</span>
-        <span class="muted">v2.0.0</span>
+        <span class="muted">v2.0.1</span>
       </div>
-      <p class="footer-copyright">LabelSpy 2.0 • MIT License • Powered by Gemini AI</p>
+      <p class="footer-copyright">LabelSpy 2.0 • MIT License • Powered by Tesseract & Gemini AI</p>
     </div>
   </div>
 
