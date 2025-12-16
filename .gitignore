@@ -1,0 +1,25 @@
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build
+dist/
+build/
+.next/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+Thumbs.db
