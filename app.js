@@ -32,6 +32,7 @@
   const metricEcodes = $('#metricEcodes');
   const metricAllergens = $('#metricAllergens');
   const metricSugars = $('#metricSugars');
+  const btnGeneratePDF = $('#btnGeneratePDF');
   const btnSaveToHistory = $('#btnSaveToHistory');
   const btnCompare = $('#btnCompare');
   const historyBlock = $('#historyBlock');
@@ -45,14 +46,21 @@
   const GEMINI_API_KEY = 'AIzaSyAh-NcbJIlwHQ8v5UJLfXPBCHbZqC03xwo';
   const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
-  // 🌐 CORS Proxy to bypass browser restrictions
-  const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+  // 🌐 Multiple CORS Proxies (fallback chain for Russia bypass)
+  const CORS_PROXIES = [
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?',
+    'https://api.codetabs.com/v1/proxy?quest=',
+    'https://cors-anywhere.herokuapp.com/',
+  ];
+  
+  let currentProxyIndex = 0;
 
   let eDb = {};
   let lastAnalysis = null;
   let lastImageDataUrl = null;
-  const HISTORY_KEY = 'labelspy_v2_history';
-  const COMPARE_KEY = 'labelspy_v2_compare';
+  const HISTORY_KEY = 'labelspy_v3_history';
+  const COMPARE_KEY = 'labelspy_v3_compare';
 
   async function loadDb() {
     try {
@@ -79,7 +87,32 @@
     });
   }
 
-  // 🤖 GEMINI VISION OCR with CORS Proxy
+  // 🌐 Try CORS Proxy with fallback
+  async function fetchWithProxyFallback(url, options = {}, tryCount = 0) {
+    if (tryCount >= CORS_PROXIES.length) {
+      throw new Error('All CORS proxies failed');
+    }
+    
+    const proxy = CORS_PROXIES[tryCount];
+    const proxiedUrl = proxy + encodeURIComponent(url);
+    
+    console.log(`🌐 Trying proxy ${tryCount + 1}/${CORS_PROXIES.length}:`, proxy);
+    
+    try {
+      const response = await fetch(proxiedUrl, options);
+      if (response.ok) {
+        console.log(`✅ Proxy ${tryCount + 1} succeeded!`);
+        currentProxyIndex = tryCount;
+        return response;
+      }
+      throw new Error(`Proxy ${tryCount + 1} returned ${response.status}`);
+    } catch (error) {
+      console.warn(`❌ Proxy ${tryCount + 1} failed:`, error.message);
+      return fetchWithProxyFallback(url, options, tryCount + 1);
+    }
+  }
+
+  // 🤖 GEMINI VISION OCR with enhanced prompts
   async function recognizeWithGemini(imageDataUrl) {
     try {
       const base64Data = imageDataUrl.split(',')[1];
@@ -88,45 +121,50 @@
       const requestBody = {
         contents: [{
           parts: [
-            { text: `Ты эксперт по распознаванию пищевых этикеток. Распознай ВЕСЬ текст с этой этикетки максимально точно.
+            { 
+              text: `Ты профессиональный эксперт по распознаванию текста с пищевых этикеток на русском и английском языках.
 
-Требования:
-1. Верни ТОЛЬКО распознанный текст БЕЗ комментариев
-2. Сохраняй структуру: "Состав:", "Пищевая ценность:"
-3. E-коды пиши как E621, E330 (без пробелов)
-4. Числа с единицами: "15г", "8г" (без пробела)
-5. Если текст нечеткий - делай лучшее предположение
-6. НЕ добавляй пояснения
+ТВОЯ ЗАДАЧА: Распознай ВЕСЬ текст с этой этикетки продукта максимально точно.
 
-Просто распознай текст точно.` },
+📋 КРИТИЧЕСКИ ВАЖНЫЕ ТРЕБОВАНИЯ:
+1. Верни ТОЛЬКО распознанный текст БЕЗ комментариев, пояснений, вступлений
+2. Сохраняй оригинальную структуру: "Состав:", "Пищевая ценность:", "Энергетическая ценность:"
+3. E-коды пиши слитно: E621, E330, E150d (без пробелов между E и цифрами)
+4. Числа с единицами слитно: "15г", "8г", "0.5г" (без пробелов)
+5. Проценты: "жиры 8%", "сахар 15%"
+6. Если текст нечеткий или поврежден - делай ЛУЧШЕЕ предположение, но НЕ пиши об этом
+7. НЕ добавляй пояснения типа "Вот распознанный текст:" или "Текст с этикетки:"
+8. НЕ пропускай мелкий текст - распознавай ВСЁ
+
+🎯 ОСОБОЕ ВНИМАНИЕ:
+- Разделяй ингредиенты запятыми
+- Сохраняй скобки: "разрыхлитель (E500ii)"
+- Сохраняй процентные доли: "вода 60%, сахар 15%"
+- Сохраняй предупреждения: "Может содержать следы..."
+
+Просто распознай текст точно как на этикетке.` 
+            },
             { inline_data: { mime_type: mimeType, data: base64Data } }
           ]
         }],
         generationConfig: { 
-          temperature: 0.1, 
-          maxOutputTokens: 2048,
-          topK: 40,
-          topP: 0.95
+          temperature: 0.05,  // Минимальная креативность для точности
+          maxOutputTokens: 3072,
+          topK: 20,
+          topP: 0.9
         }
       };
 
-      const proxiedUrl = CORS_PROXY + encodeURIComponent(GEMINI_API_URL);
-      
-      const response = await fetch(proxiedUrl, {
+      const response = await fetchWithProxyFallback(GEMINI_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Gemini API error: ${response.status}`);
-      }
-
       const data = await response.json();
       
       if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-        throw new Error('Invalid Gemini response');
+        throw new Error('Invalid Gemini response structure');
       }
 
       const text = data.candidates[0].content.parts[0].text;
@@ -137,37 +175,53 @@
     }
   }
 
-  // 🧠 GEMINI ANALYTICS
+  // 🧠 GEMINI ANALYTICS with detailed recommendations
   async function analyzeWithGemini(compositionText) {
     try {
       const requestBody = {
         contents: [{
-          parts: [{ text: `Ты эксперт-нутрициолог. Проанализируй состав продукта и дай краткую оценку (2-3 предложения).
+          parts: [{ 
+            text: `Ты эксперт-нутрициолог и токсиколог. Проанализируй состав продукта и дай КРАТКУЮ профессиональную оценку.
 
-Состав:
+Состав продукта:
 ${compositionText}
 
-Оцени:
-1. Наличие вредных E-кодов (консерванты, красители)
-2. Скрытые сахара (сиропы, декстроза)
-3. Аллергены (молоко, глютен, соя)
-4. Общее качество продукта
+📊 ТВОЙ АНАЛИЗ ДОЛЖЕН ВКЛЮЧАТЬ (максимум 5-6 предложений):
 
-Ответ дай КРАТКО, простым языком для обычного покупателя.` }]
+1. ⚠️ ОПАСНЫЕ КОМПОНЕНТЫ (если есть):
+   - E-коды с высоким риском (консерванты, красители, усилители вкуса)
+   - Трансжиры, пальмовое масло
+   - Канцерогены или аллергены
+
+2. 🍬 СКРЫТЫЕ САХАРА:
+   - Сиропы (глюкозный, фруктозный, инвертный)
+   - Декстроза, мальтодекстрин, патока
+
+3. 🚦 ОБЩАЯ ОЦЕНКА:
+   - Можно ли употреблять регулярно?
+   - Для какой диеты подходит/не подходит?
+   - Краткая рекомендация покупателю
+
+✅ ФОРМАТ ОТВЕТА:
+Кратко и по делу, простым языком. БЕЗ вступлений типа "Проанализирую состав".
+
+Начни сразу с оценки: "⚠️ Содержит..." или "✅ Относительно безопасный состав..."` 
+          }]
         }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 300 }
+        generationConfig: { 
+          temperature: 0.7, 
+          maxOutputTokens: 500,
+          topK: 40,
+          topP: 0.95
+        }
       };
 
-      const proxiedUrl = CORS_PROXY + encodeURIComponent(GEMINI_API_URL);
-      
-      const response = await fetch(proxiedUrl, {
+      const response = await fetchWithProxyFallback(GEMINI_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       });
 
-      if (!response.ok) return null;
-      
       const data = await response.json();
       return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
     } catch (error) {
@@ -176,7 +230,7 @@ ${compositionText}
     }
   }
 
-  // 🎯 Advanced Image Preprocessing
+  // 🎨 Advanced Image Preprocessing
   async function preprocessImage(imageDataUrl) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -242,7 +296,7 @@ ${compositionText}
       .replace(/З/g, '3').replace(/з/g, '3')
       .replace(/l/g, '1')
       .replace(/Ё/g, 'Е').replace(/ё/g, 'е')
-      .replace(/[^\w\s\u0401\u0451\u0410-\u042f\u0430-\u044f()\-.,+×÷=\n]/g, '')
+      .replace(/[^\w\s\u0401\u0451\u0410-\u042f\u0430-\u044f()\-.,+×÷=%\n]/g, '')
       .replace(/\s+/g, ' ')
       .replace(/([ЕE])\s+([0-9])/g, 'E$2')
       .replace(/([ЕE])-([0-9])/g, 'E$2')
@@ -421,6 +475,78 @@ ${compositionText}
     `).join('');
   }
 
+  // 📄 Generate PDF Report with jsPDF
+  async function generatePDFReport() {
+    if (!lastAnalysis || typeof jspdf === 'undefined') {
+      alert('⚠️ Нет данных для отчета или PDF библиотека не загружена');
+      return;
+    }
+    
+    try {
+      const { jsPDF } = jspdf;
+      const doc = new jsPDF();
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('LabelSpy - Анализ продукта', 20, 20);
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Дата: ${new Date().toLocaleDateString('ru')}`, 20, 30);
+      
+      let y = 45;
+      
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Общая оценка', 20, y);
+      y += 8;
+      
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      const verdictText = `${lastAnalysis.verdict.title}: ${lastAnalysis.verdict.body}`;
+      const splitVerdict = doc.splitTextToSize(verdictText, 170);
+      doc.text(splitVerdict, 20, y);
+      y += splitVerdict.length * 6 + 10;
+      
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('E-коды', 20, y);
+      y += 8;
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      if (lastAnalysis.ecodes && lastAnalysis.ecodes.length > 0) {
+        doc.text(lastAnalysis.ecodes.join(', '), 20, y);
+        y += 8;
+      } else {
+        doc.text('Не обнаружено', 20, y);
+        y += 8;
+      }
+      
+      y += 5;
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Аллергены', 20, y);
+      y += 8;
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      if (lastAnalysis.allergens && lastAnalysis.allergens.length > 0) {
+        doc.text(lastAnalysis.allergens.join(', '), 20, y);
+        y += 8;
+      } else {
+        doc.text('Не обнаружено', 20, y);
+        y += 8;
+      }
+      
+      doc.save(`labelspy-report-${Date.now()}.pdf`);
+      alert('✅ PDF отчет сохранен!');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      alert('❌ Ошибка генерации PDF');
+    }
+  }
+
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -441,16 +567,16 @@ ${compositionText}
       setOcrProgress(0.1, '🖼️ Обработка изображения...');
       const processed = await preprocessImage(lastImageDataUrl);
       
-      setOcrProgress(0.3, '🔍 Распознавание текста Tesseract...');
+      setOcrProgress(0.3, '🔍 Распознавание Tesseract...');
       const { data: { text } } = await Tesseract.recognize(processed, ocrLang.value || 'rus+eng', {
         logger: m => {
           if (m.status === 'recognizing text') {
-            setOcrProgress(0.3 + m.progress * 0.6, `🔍 ${m.status} ${Math.round(m.progress * 100)}%`);
+            setOcrProgress(0.3 + m.progress * 0.6, `🔍 ${Math.round(m.progress * 100)}%`);
           }
         }
       });
       
-      setOcrProgress(0.95, '✨ Очистка текста...');
+      setOcrProgress(0.95, '✨ Очистка...');
       textInput.value = cleanOCRText(text);
       
       setOcrProgress(1, '✅ Готово!');
@@ -470,10 +596,10 @@ ${compositionText}
       btnGeminiOcr.disabled = true;
       ocrStatus.classList.remove('hidden');
       try {
-        setOcrProgress(0.2, '🤖 Отправка в Gemini Vision API...');
+        setOcrProgress(0.2, '🤖 Отправка в Gemini...');
         const text = await recognizeWithGemini(lastImageDataUrl);
         
-        setOcrProgress(0.9, '✨ Обработка результата...');
+        setOcrProgress(0.9, '✨ Обработка...');
         textInput.value = cleanOCRText(text);
         
         setOcrProgress(1, '✅ Gemini распознал идеально!');
@@ -481,7 +607,7 @@ ${compositionText}
       } catch (e) {
         console.error('Gemini Error:', e);
         ocrStatus.classList.add('hidden');
-        alert('❌ Ошибка Gemini API: ' + e.message + '\n\nПопробуйте Tesseract OCR (левая кнопка).');
+        alert(`❌ Ошибка Gemini: ${e.message}\n\n🔄 Попробуйте еще раз или используйте Tesseract.`);
       }
       btnGeminiOcr.disabled = false;
     });
@@ -532,12 +658,13 @@ ${compositionText}
       const aiAnalysis = $('#aiAnalysis');
       if (aiAnalysis) {
         aiAnalysis.classList.remove('hidden');
-        aiAnalysis.innerHTML = '<div class="pill pill-yellow">⏳ Анализирую с помощью Gemini AI...</div>';
+        aiAnalysis.innerHTML = '<div class="pill pill-yellow">⏳ Анализ Gemini AI...</div>';
         
         try {
           const analysis = await analyzeWithGemini(compositionBlock);
           if (analysis) {
             aiAnalysis.innerHTML = `<div class="ai-insight"><strong>🤖 AI-анализ (Gemini):</strong> ${analysis}</div>`;
+            lastAnalysis.aiAnalysis = analysis;
           } else {
             aiAnalysis.classList.add('hidden');
           }
@@ -599,6 +726,10 @@ ${compositionText}
     setPill(tlSalt, tl_salt.level, tl_salt.label);
   });
 
+  if (btnGeneratePDF) {
+    btnGeneratePDF.addEventListener('click', generatePDFReport);
+  }
+
   if (btnSaveToHistory) {
     btnSaveToHistory.addEventListener('click', () => {
       if (!lastAnalysis) return;
@@ -623,5 +754,6 @@ ${compositionText}
   loadDb();
   loadHistory();
 
-  console.log('🔍 LabelSpy 2.2 loaded! Gemini API + Tesseract with CORS Proxy');
+  console.log('🔍 LabelSpy 3.0 loaded! Multi-proxy, enhanced Gemini, PDF reports');
+  console.log('🌐 Active CORS Proxy:', CORS_PROXIES[currentProxyIndex]);
 })();
