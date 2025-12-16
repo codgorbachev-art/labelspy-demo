@@ -1,0 +1,44 @@
+{
+  "name": "LabelSpy Demo - Product Analysis",
+  "short_name": "LabelSpy",
+  "description": "Analyze food product ingredients: OCR, E-codes, allergens, nutrition traffic light. Русский язык поддерживается.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b1320",
+  "theme_color": "#2dd4bf",
+  "lang": "ru",
+  "dir": "auto",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='90' fill='%232dd4bf'/><text x='96' y='120' font-size='80' font-weight='bold' text-anchor='middle' fill='%230b1320'>L</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><circle cx='256' cy='256' r='240' fill='%232dd4bf'/><text x='256' y='340' font-size='210' font-weight='bold' text-anchor='middle' fill='%230b1320'>L</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect width='540' height='720' fill='%230b1320'/><text x='270' y='360' font-size='40' text-anchor='middle' fill='%23e7eefc'>LabelSpy Demo</text></svg>",
+      "sizes": "540x720",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Analyze Product",
+      "short_name": "Analyze",
+      "description": "Quick access to product analysis",
+      "url": "./"
+    }
+  ]
+}
