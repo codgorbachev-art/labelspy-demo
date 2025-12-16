@@ -217,6 +217,11 @@ p {
   font-size: 16px;
 }
 
+.btn-block {
+  width: 100%;
+  justify-content: center;
+}
+
 .btn-icon {
   font-size: 18px;
 }
