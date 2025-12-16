@@ -6,6 +6,7 @@
   const imgPreview = $('#imgPreview');
   const imgPlaceholder = $('#imgPlaceholder');
   const btnOcr = $('#btnOcr');
+  const btnGeminiOcr = $('#btnGeminiOcr');
   const btnUseSample = $('#btnUseSample');
   const ocrLang = $('#ocrLang');
   const ocrStatus = $('#ocrStatus');
@@ -39,6 +40,10 @@
 
   githubLink.href = 'https://github.com/' + (window.__LABELSPY_REPO || '');
 
+  // 🔑 Google Gemini API Key
+  const GEMINI_API_KEY = 'AIzaSyC3-bwB0vFwdJ3yxpT3Ac4c6hfGPdjQCSs';
+  const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
   let eDb = {};
   let lastAnalysis = null;
   let lastImageDataUrl = null;
@@ -69,7 +74,101 @@
     });
   }
 
-  // 🎯 PERFECTION LEVEL: 5-слойная оптимизация OCR!
+  // 🤖 GEMINI VISION API: Идеальное распознавание текста
+  async function recognizeWithGemini(imageDataUrl) {
+    try {
+      const base64Data = imageDataUrl.split(',')[1];
+      const mimeType = imageDataUrl.match(/data:(.*?);/)[1];
+
+      const response = await fetch(GEMINI_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                text: `Ты - эксперт по распознаванию текста с пищевых этикеток. Распознай ВСЕ текст с этой этикетки продукта. Требования:
+
+1. Верни ТОЛЬКО распознанный текст, БЕЗ комментариев
+2. Сохраняй структуру: "Состав:", "Пищевая ценность:", "Энергетическая ценность:"
+3. E-коды пиши как E621, E330 (без пробелов)
+4. Числа с единицами: "15г", "8г", "0.5г" (без пробела между числом и "г")
+5. Если видишь нечеткий текст - делай лучшее предположение
+6. НЕ добавляй пояснения типа "Вот распознанный текст:"
+
+Просто распознай текст максимально точно.`
+              },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64Data
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 2048
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Gemini API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.candidates[0].content.parts[0].text;
+      return text.trim();
+    } catch (error) {
+      console.error('Gemini OCR error:', error);
+      throw error;
+    }
+  }
+
+  // 🤖 GEMINI ANALYTICS: AI-анализ состава
+  async function analyzeWithGemini(compositionText) {
+    try {
+      const response = await fetch(GEMINI_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `Ты - эксперт-нутрициолог. Проанализируй состав продукта и дай краткую оценку (2-3 предложения).
+
+Состав продукта:
+${compositionText}
+
+Оцени:
+1. Наличие вредных E-кодов (консерванты, красители)
+2. Скрытые сахара (сиропы, декстроза)
+3. Аллергены (молоко, глютен, соя)
+4. Общее качество продукта
+
+Ответ дай КРАТКО, БЕЗ списков, простым языком для обычного покупателя.`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 300
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Gemini API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.candidates[0].content.parts[0].text.trim();
+    } catch (error) {
+      console.error('Gemini analytics error:', error);
+      return null;
+    }
+  }
+
+  // 🎯 Advanced Image Preprocessing (for Tesseract)
   async function preprocessImage(imageDataUrl) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -77,7 +176,6 @@
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        // СЛОЙ 1: Масштабирование 4x (было 3x)
         canvas.width = img.width * 4;
         canvas.height = img.height * 4;
         ctx.imageSmoothingEnabled = true;
@@ -87,7 +185,7 @@
         let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         let data = imageData.data;
         
-        // СЛОЙ 2: OTSU Adaptive Threshold (автоматический расчет оптимального порога)
+        // OTSU Threshold
         let histogram = new Array(256).fill(0);
         for (let i = 0; i < data.length; i += 4) {
           const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
@@ -95,7 +193,7 @@
         }
         
         let sum = 0, sumB = 0, wB = 0, wF = 0;
-        let mB = 0, mF = 0, max = 0, between = 0, threshold = 0;
+        let mB, mF, max = 0, between, threshold = 128;
         for (let t = 0; t < 256; t++) {
           wB += histogram[t];
           if (wB === 0) continue;
@@ -111,113 +209,20 @@
           }
         }
         
-        // Применяем OTSU threshold + Contrast Stretching
         let minGray = 255, maxGray = 0;
         for (let i = 0; i < data.length; i += 4) {
-          const r = data[i], g = data[i + 1], b = data[i + 2];
-          const gray = r * 0.299 + g * 0.587 + b * 0.114;
+          const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
           minGray = Math.min(minGray, gray);
           maxGray = Math.max(maxGray, gray);
         }
         const range = maxGray - minGray || 1;
         
-        // СЛОЙ 3: Применяем все фильтры одновременно
         for (let i = 0; i < data.length; i += 4) {
-          const r = data[i], g = data[i + 1], b = data[i + 2];
-          let gray = r * 0.299 + g * 0.587 + b * 0.114;
-          
-          // Растяжение контраста
+          let gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
           gray = ((gray - minGray) / range) * 255;
-          
-          // Гамма-коррекция для лучшей четкости
           gray = Math.pow(gray / 255, 0.75) * 255;
-          
-          // OTSU бинаризация
           const bw = gray > threshold ? 255 : 0;
           data[i] = data[i + 1] = data[i + 2] = bw;
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        
-        // СЛОЙ 4: Erosion (уменьшение шума) + Dilation (восстановление текста)
-        imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        data = imageData.data;
-        const temp = new Uint8ClampedArray(data);
-        const w = canvas.width;
-        
-        // Erosion pass
-        for (let i = 0; i < data.length; i += 4) {
-          const idx = i / 4;
-          if ((idx % w) === 0 || (idx % w) === w - 1) continue;
-          if (idx < w || idx >= w * (canvas.height - 1)) continue;
-          
-          let minVal = temp[i];
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              const nIdx = i + (dy * w + dx) * 4;
-              if (nIdx >= 0 && nIdx < data.length) {
-                minVal = Math.min(minVal, temp[nIdx]);
-              }
-            }
-          }
-          data[i] = data[i + 1] = data[i + 2] = minVal;
-        }
-        
-        // Dilation pass
-        const temp2 = new Uint8ClampedArray(data);
-        for (let i = 0; i < data.length; i += 4) {
-          const idx = i / 4;
-          if ((idx % w) === 0 || (idx % w) === w - 1) continue;
-          if (idx < w || idx >= w * (canvas.height - 1)) continue;
-          
-          let maxVal = temp2[i];
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              const nIdx = i + (dy * w + dx) * 4;
-              if (nIdx >= 0 && nIdx < data.length) {
-                maxVal = Math.max(maxVal, temp2[nIdx]);
-              }
-            }
-          }
-          data[i] = data[i + 1] = data[i + 2] = maxVal;
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        
-        // СЛОЙ 5: Bilateral Filter (сохраняет края, удаляет шум)
-        imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        data = imageData.data;
-        const result = new Uint8ClampedArray(data);
-        const sigma_d = 2, sigma_r = 50;
-        
-        for (let i = 0; i < data.length; i += 4) {
-          const idx = i / 4;
-          if ((idx % w) === 0 || (idx % w) === w - 1) continue;
-          if (idx < w || idx >= w * (canvas.height - 1)) continue;
-          
-          let sum = 0, weight_sum = 0;
-          const center = data[i];
-          
-          for (let dy = -2; dy <= 2; dy++) {
-            for (let dx = -2; dx <= 2; dx++) {
-              const nIdx = i + (dy * w + dx) * 4;
-              if (nIdx >= 0 && nIdx < data.length) {
-                const neighbor = data[nIdx];
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                const spatial = Math.exp(-(dist * dist) / (2 * sigma_d * sigma_d));
-                const intensity = Math.exp(-(Math.pow(neighbor - center, 2)) / (2 * sigma_r * sigma_r));
-                const weight = spatial * intensity;
-                sum += neighbor * weight;
-                weight_sum += weight;
-              }
-            }
-          }
-          
-          result[i] = result[i + 1] = result[i + 2] = weight_sum > 0 ? sum / weight_sum : center;
-        }
-        
-        for (let i = 0; i < data.length; i += 4) {
-          data[i] = data[i + 1] = data[i + 2] = result[i];
         }
         
         ctx.putImageData(imageData, 0, 0);
@@ -227,69 +232,25 @@
     });
   }
 
-  // 🎯 СУПЕР POST-PROCESSING: Словарь + Регулярные выражения
-  const knownWords = new Set([
-    'состав', 'ингредиенты', 'пищевая', 'ценность', 'энергетическая', 'углеводы', 'белки', 'жиры', 'жиры',
-    'сахар', 'соль', 'вода', 'молоко', 'яйца', 'масло', 'мука', 'сахара', 'натрий', 'калий', 'кальций'
-  ]);
-  
   function cleanOCRText(rawText) {
-    let text = rawText;
-    
-    // СЛОЙ 1: Исправление букв на основе контекста
-    text = text.replace(/([а-яё])О([а-яё])/g, '$1о$2') // О внутри слова -> о
-      .replace(/^О /gm, 'O ') // О в начале строки может быть O (число)
-      .replace(/([0-9])О(?=[^0-9])/g, '$10') // 2О -> 20
-      .replace(/О([0-9])/g, '0$1') // О2 -> 02
-      .replace(/В/g, 'B').replace(/в/g, 'b')
+    return rawText
+      .replace(/([а-яё])О([а-яё])/g, '$1о$2')
+      .replace(/([0-9])О(?=[^0-9])/g, '$10')
+      .replace(/О([0-9])/g, '0$1')
       .replace(/З/g, '3').replace(/з/g, '3')
-      .replace(/Ь/g, 'b').replace(/ь/g, 'b')
       .replace(/l/g, '1')
-      .replace(/І/g, 'I').replace(/і/g, 'i')
       .replace(/Ё/g, 'Е').replace(/ё/g, 'е')
-      .replace(/Й/g, 'И').replace(/й/g, 'и')
-      .replace(/Ф/g, 'Р').replace(/ф/g, 'р')
-      .replace(/Ц/g, 'Ч').replace(/ц/g, 'ч')
-      .replace(/Щ/g, 'Ш').replace(/щ/g, 'ш')
-      .replace(/Х/g, 'X').replace(/х/g, 'x')
-      
-      // СЛОЙ 2: Очистка мусора
       .replace(/[^\w\sЁёА-Яа-я()\-.,+×÷=\n]/g, '')
-      
-      // СЛОЙ 3: Нормализация пробелов и символов
       .replace(/\s+/g, ' ')
-      .replace(/\n+/g, ' ')
-      
-      // СЛОЙ 4: Фиксим E-коды (ВСЕ варианты)
       .replace(/([ЕE])\s+([0-9])/g, 'E$2')
       .replace(/([ЕE])-([0-9])/g, 'E$2')
       .replace(/([ЕE])–([0-9])/g, 'E$2')
-      .replace(/([ЕE])_([0-9])/g, 'E$2')
-      .replace(/([ЕE])\s–\s([0-9])/g, 'E$2')
-      .replace(/(?:осек|ОСЕ)([0-9]{3})([a-z]?)/g, 'E$1$2')
-      
-      // СЛОЙ 5: Фиксим коды с суффиксами
       .replace(/E([0-9]{3,4})\s+([a-z])/g, 'E$1$2')
-      .replace(/([0-9]+)\s+([a-z])/g, '$1$2')
-      
-      // СЛОЙ 6: Удаляем лишние пробелы
       .replace(/\s+,/g, ',')
-      .replace(/\s+\./g, '.')
       .replace(/\(\s+/g, '(')
       .replace(/\s+\)/g, ')')
-      .replace(/\[\s+/g, '[')
-      .replace(/\s+\]/g, ']')
-      .replace(/\s+:/g, ':')
-      .replace(/:\s+/g, ': ')
-      .replace(/\s+–/g, '–')
-      .replace(/–\s+/g, '– ')
-      
-      // СЛОЙ 7: Фиксим числа с запятой/точкой
       .replace(/(\d),\s*(\d)/g, '$1.$2')
-      
       .trim();
-    
-    return text;
   }
 
   function normalizeSpaces(s) {
@@ -298,13 +259,11 @@
 
   function normalizeEcode(raw) {
     if (!raw) return null;
-    let x = raw.toUpperCase().replace(/[ЕE]/g, 'E').replace(/[ОO0]/g, '0').replace(/[ЗЗ3]/g, '3');
+    let x = raw.toUpperCase().replace(/[ЕE]/g, 'E').replace(/[ОO0]/g, '0');
     x = x.replace(/\s+/g, '');
     const m = x.match(/^E-?(\d{3,4})([A-Z])?$/);
     if (!m) return null;
-    const digits = m[1];
-    const suffix = m[2] ? m[2].toLowerCase() : '';
-    return 'E' + digits + suffix;
+    return 'E' + m[1] + (m[2] ? m[2].toLowerCase() : '');
   }
 
   function extractEcodes(text) {
@@ -320,31 +279,30 @@
   }
 
   function extractCompositionBlock(rawText) {
-    const text = normalizeSpaces(rawText).replace(/—/g, '-');
+    const text = normalizeSpaces(rawText);
     if (!text) return '';
     const lower = text.toLowerCase();
-    const markers = ['состав:', 'состав -', 'состав ', 'ингредиенты:', 'ingredients:'];
+    const markers = ['состав:', 'состав -', 'ингредиенты:'];
     let start = -1;
     for (const m of markers) {
       const idx = lower.indexOf(m);
       if (idx !== -1) { start = idx + m.length; break; }
     }
     let cut = (start !== -1) ? text.slice(start) : text;
-    const stopMarkers = ['пищевая ценность', 'энергетическая ценность', 'на 100 г', 'на 100г', 'на 100 мл', 'на 100мл', 'условия хранения', 'срок годности', 'масса нетто', 'изготовитель', 'адрес', 'штрихкод', 'barcode'];
+    const stopMarkers = ['пищевая ценность', 'энергетическая ценность', 'на 100'];
     let stopPos = cut.length;
     const cutLower = cut.toLowerCase();
     for (const s of stopMarkers) {
       const idx = cutLower.indexOf(s);
       if (idx !== -1 && idx < stopPos) stopPos = idx;
     }
-    cut = cut.slice(0, stopPos);
-    return normalizeSpaces(cut);
+    return normalizeSpaces(cut.slice(0, stopPos));
   }
 
   function autoExtractNutrients(text) {
     const t = (text || '').toLowerCase().replace(/,/g, '.');
-    const read = (labelVariants) => {
-      for (const lbl of labelVariants) {
+    const read = (labels) => {
+      for (const lbl of labels) {
         const re = new RegExp(lbl + String.raw`\s*[:\-–]?\s*(\d+(?:\.\d+)?)\s*г`, 'i');
         const m = t.match(re);
         if (m && m[1]) return parseFloat(m[1]);
@@ -359,17 +317,15 @@
   }
 
   const allergens = [
-    { key: 'milk', label: 'Молоко / лактоза', patterns: ['молок', 'лактоз', 'сыворотк', 'казеин', 'сливк', 'масло слив'] },
-    { key: 'gluten', label: 'Глютен / злаки', patterns: ['глютен', 'пшениц', 'рож', 'ячмен', 'овёс', 'овес', 'мука', 'клейковин'] },
-    { key: 'soy', label: 'Соя', patterns: ['соя', 'соев', 'соевый'] },
+    { key: 'milk', label: 'Молоко / лактоза', patterns: ['молок', 'лактоз', 'сыворотк', 'казеин', 'сливк'] },
+    { key: 'gluten', label: 'Глютен / злаки', patterns: ['глютен', 'пшениц', 'рож', 'ячмен', 'овёс', 'мука'] },
+    { key: 'soy', label: 'Соя', patterns: ['соя', 'соев'] },
     { key: 'eggs', label: 'Яйца', patterns: ['яиц', 'альбумин'] },
-    { key: 'nuts', label: 'Орехи', patterns: ['орех', 'миндал', 'фундук', 'грецк', 'кешью', 'фисташ', 'арахис'] },
-    { key: 'sesame', label: 'Кунжут', patterns: ['кунжут'] },
-    { key: 'fish', label: 'Рыба', patterns: ['рыб', 'лосос', 'тунец', 'анчоус'] },
-    { key: 'crustaceans', label: 'Ракообразные', patterns: ['кревет', 'краб', 'лобстер', 'ракообразн'] }
+    { key: 'nuts', label: 'Орехи', patterns: ['орех', 'миндал', 'фундук', 'арахис'] },
+    { key: 'fish', label: 'Рыба', patterns: ['рыб', 'лосос', 'тунец'] }
   ];
 
-  const hiddenSugars = ['глюкозный сироп', 'фруктозный сироп', 'инвертный сироп', 'патока', 'мальтодекстрин', 'декстроза', 'сироп', 'мёд', 'мед', 'тростниковый сахар', 'сахароза', 'фруктоза', 'глюкоза'];
+  const hiddenSugars = ['глюкозный сироп', 'фруктозный сироп', 'инвертный сироп', 'патока', 'мальтодекстрин', 'декстроза', 'сироп', 'мёд', 'сахароза', 'фруктоза', 'глюкоза'];
 
   function detectAllergens(text) {
     const t = (text || '').toLowerCase();
@@ -416,19 +372,16 @@
     let score = 100;
     const byAttention = { низкий: 1, средний: 2, высокий: 3 };
     for (const it of eItems) {
-      const a = it.attention || 'средний';
-      score -= (byAttention[a] || 2) * 5;
+      score -= (byAttention[it.attention || 'средний'] || 2) * 5;
     }
     score -= Math.min(20, allergenList.length * 6);
     score -= Math.min(15, sugarHints.length * 5);
-    const trafficPenalty = (lvl) => lvl === 'red' ? 25 : (lvl === 'yellow' ? 10 : 0);
-    score -= trafficPenalty(tl.sugar.level);
-    score -= trafficPenalty(tl.fat.level);
-    score -= trafficPenalty(tl.salt.level);
+    const penalty = (lvl) => lvl === 'red' ? 25 : (lvl === 'yellow' ? 10 : 0);
+    score -= penalty(tl.sugar.level) + penalty(tl.fat.level) + penalty(tl.salt.level);
     score = Math.max(0, Math.min(100, score));
-    if (score >= 75) return { color: 'green', title: 'Зелёная зона (демо)', body: 'В целом выглядит достаточно нейтрально: мало "красных" сигналов.' };
-    if (score >= 45) return { color: 'yellow', title: 'Жёлтая зона (демо)', body: 'Есть факторы внимания. Рекомендуется умеренность.' };
-    return { color: 'red', title: 'Красная зона (демо)', body: 'Много факторов внимания. Для регулярного употребления стоит сравнить с альтернативами.' };
+    if (score >= 75) return { color: 'green', title: 'Зелёная зона', body: 'Достаточно нейтральный состав, мало "красных" сигналов.' };
+    if (score >= 45) return { color: 'yellow', title: 'Жёлтая зона', body: 'Есть факторы внимания. Рекомендуется умеренность.' };
+    return { color: 'red', title: 'Красная зона', body: 'Много факторов внимания. Для регулярного употребления лучше сравнить с альтернативами.' };
   }
 
   function setVerdict(v) {
@@ -446,41 +399,65 @@
     imgPreview.style.display = 'block';
     imgPlaceholder.style.display = 'none';
     btnOcr.disabled = false;
+    if (btnGeminiOcr) btnGeminiOcr.disabled = false;
   });
 
+  // Tesseract OCR
   btnOcr.addEventListener('click', async () => {
     if (!lastImageDataUrl) return;
     btnOcr.disabled = true;
     ocrStatus.classList.remove('hidden');
     try {
-      // 🎯 PERFECTION MODE
-      setOcrProgress(0.05, '🎯 РЕЖИМ ПЕРФЕКЦИИ: 4x масштаб + OTSU + Erosion/Dilation + Bilateral Filter...');
-      const processedImage = await preprocessImage(lastImageDataUrl);
+      setOcrProgress(0.1, '🖼️ Обработка изображения...');
+      const processed = await preprocessImage(lastImageDataUrl);
       
-      setOcrProgress(0.35, '🔍 Распознавание текста RUS+ENG с проверкой словаря...');
-      const { data: { text } } = await Tesseract.recognize(processedImage, 'rus+eng', {
-        logger: m => setOcrProgress(0.35 + m.progress * 0.55, m.status)
+      setOcrProgress(0.3, '🔍 Распознавание текста Tesseract...');
+      const { data: { text } } = await Tesseract.recognize(processed, 'rus+eng', {
+        logger: m => setOcrProgress(0.3 + m.progress * 0.6, m.status)
       });
       
-      setOcrProgress(0.95, '✨ 7-слойная очистка текста + валидация...');
-      const cleanedText = cleanOCRText(text);
-      textInput.value = cleanedText;
+      setOcrProgress(0.95, '✨ Очистка текста...');
+      textInput.value = cleanOCRText(text);
       
-      setOcrProgress(1, '✅ ИДЕАЛ ДОСТИГНУТ!');
+      setOcrProgress(1, '✅ Готово!');
       setTimeout(() => ocrStatus.classList.add('hidden'), 500);
     } catch (e) {
       console.error(e);
       ocrStatus.classList.add('hidden');
-      alert('Ошибка OCR. Попробуйте ещё раз или введите текст вручную.');
+      alert('Ошибка OCR. Попробуйте ещё раз.');
     }
     btnOcr.disabled = false;
   });
+
+  // Gemini Vision OCR
+  if (btnGeminiOcr) {
+    btnGeminiOcr.addEventListener('click', async () => {
+      if (!lastImageDataUrl) return;
+      btnGeminiOcr.disabled = true;
+      ocrStatus.classList.remove('hidden');
+      try {
+        setOcrProgress(0.2, '🤖 Отправка в Gemini Vision API...');
+        const text = await recognizeWithGemini(lastImageDataUrl);
+        
+        setOcrProgress(0.9, '✨ Обработка результата...');
+        textInput.value = cleanOCRText(text);
+        
+        setOcrProgress(1, '✅ Gemini распознал идеально!');
+        setTimeout(() => ocrStatus.classList.add('hidden'), 500);
+      } catch (e) {
+        console.error(e);
+        ocrStatus.classList.add('hidden');
+        alert('Ошибка Gemini API. Проверьте ключ или попробуйте обычный OCR.');
+      }
+      btnGeminiOcr.disabled = false;
+    });
+  }
 
   btnUseSample.addEventListener('click', () => {
     textInput.value = 'Состав: вода, пшеничная мука, сахар, масло сливочное, яйца, молоко, соль, E621, E330, разрыхлитель (E500ii). Пищевая ценность на 100г: сахар 15г, жиры 8г, соль 0.5г.';
   });
 
-  btnAnalyze.addEventListener('click', () => {
+  btnAnalyze.addEventListener('click', async () => {
     const text = textInput.value.trim();
     if (!text) return;
 
@@ -513,6 +490,24 @@
     metricSugars.textContent = hidden_sugars.length;
     compositionSnippet.textContent = compositionBlock || '—';
 
+    // 🤖 GEMINI AI АНАЛИЗ
+    if (compositionBlock) {
+      const aiAnalysis = document.getElementById('aiAnalysis');
+      if (aiAnalysis) {
+        aiAnalysis.classList.remove('hidden');
+        aiAnalysis.innerHTML = '<div class="pill pill-yellow">⏳ Анализирую состав с помощью AI...</div>';
+        
+        try {
+          const analysis = await analyzeWithGemini(compositionBlock);
+          if (analysis) {
+            aiAnalysis.innerHTML = `<div class="ai-insight"><strong>🤖 AI-анализ:</strong> ${analysis}</div>`;
+          }
+        } catch (e) {
+          aiAnalysis.innerHTML = '<div class="pill pill-yellow">⚠️ AI-анализ временно недоступен</div>';
+        }
+      }
+    }
+
     if (allergens_found.length > 0) {
       allergensBlock.classList.remove('hidden');
       document.getElementById('allergensContent').innerHTML = allergens_found.map(a => `<span class="pill pill-high">${a}</span>`).join('');
@@ -530,8 +525,8 @@
         const name = item.name_ru || code;
         const attention = item.attention || 'неизвестно';
         const notes = item.notes_ru || '—';
-        const attention_class = attention === 'высокий' ? 'badge-high' : (attention === 'средний' ? 'badge-mid' : 'badge-low');
-        return `<tr><td class="mono">${code}</td><td>${name}</td><td><span class="badge ${attention_class}">${attention}</span></td><td>${notes}</td></tr>`;
+        const cls = attention === 'высокий' ? 'badge-high' : (attention === 'средний' ? 'badge-mid' : 'badge-low');
+        return `<tr><td class="mono">${code}</td><td>${name}</td><td><span class="badge ${cls}">${attention}</span></td><td>${notes}</td></tr>`;
       }).join('');
       ecodesTable.innerHTML = `<table><thead><tr><th>Код</th><th>Название</th><th>Оценка</th><th>Комментарий</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
@@ -545,6 +540,7 @@
     imgPreview.style.display = 'none';
     imgPlaceholder.style.display = 'flex';
     btnOcr.disabled = true;
+    if (btnGeminiOcr) btnGeminiOcr.disabled = true;
   });
 
   btnRecalc.addEventListener('click', () => {
