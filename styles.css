@@ -354,6 +354,22 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+/* AI Analysis Block */
+.ai-insight {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  padding: 4px 0;
+}
+
+.ai-insight strong {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+}
+
 .verdict {
   border-radius: var(--radius);
   padding: 14px;
