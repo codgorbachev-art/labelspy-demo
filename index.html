@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="LabelSpy Demo — анализ состава продуктов питания по OCR, E-коды, аллергены, светофор по питательным веществам" />
+  <meta name="theme-color" content="#0b1320" />
+  <title>LabelSpy Demo — Анализ этикеток продуктов</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='90' fill='%232dd4bf'/><text x='96' y='120' font-size='80' font-weight='bold' text-anchor='middle' fill='%230b1320'>L</text></svg>" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-header">
+    <div class="container">
+      <div class="header-row">
+        <div class="brand">
+          <div class="brand-dot"></div>
+          <div>
+            <div class="brand-title">LabelSpy</div>
+            <div class="brand-subtitle">Demo: Анализ состава продуктов</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" id="btnOpenAbout">ℹ️ О проекте</button>
+          <a href="" id="githubLink" class="btn btn-secondary" style="text-decoration: none">⭐ GitHub</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- OCR & Input Section -->
+    <div class="card">
+      <h2>📸 Шаг 1: Захват состава (OCR или ввод вручную)</h2>
+      
+      <div class="upload">
+        <p class="muted small">Загрузите фото этикетки продукта или вставьте текст состава вручную</p>
+        <input type="file" id="fileInput" accept="image/*" />
+        <div class="upload-help">PNG, JPG, WebP. До 5 MB. OCR работает в браузере (нет отправки на сервер).</div>
+      </div>
+
+      <div class="preview-row">
+        <div class="preview">
+          <img id="imgPreview" alt="preview" />
+          <div id="imgPlaceholder" class="placeholder">
+            <p class="muted">Превью изображения</p>
+          </div>
+        </div>
+        
+        <div class="actions">
+          <div class="field">
+            <label class="field-label">Язык OCR</label>
+            <select id="ocrLang">
+              <option value="rus">Русский</option>
+              <option value="eng">English</option>
+              <option value="rus+eng">Русский + English</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btnOcr" disabled>🔍 Распознать текст</button>
+          <button class="btn btn-secondary" id="btnUseSample">Использовать пример</button>
+          
+          <div id="ocrStatus" class="progress hidden">
+            <div class="progress-row">
+              <span class="muted small">OCR в процессе...</span>
+            </div>
+            <div class="progressbar">
+              <div id="ocrBar" class="progressbar-fill"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top: 14px">
+        <label class="field-label">Текст состава (можно отредактировать)</label>
+        <textarea class="textarea" id="textInput" placeholder="Состав будет выведен сюда или вставьте вручную..."></textarea>
+        <div class="inline-actions">
+          <button class="btn btn-primary" id="btnAnalyze">✅ Анализировать состав</button>
+          <button class="btn btn-secondary" id="btnClear">🗑️ Очистить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Section -->
+    <div id="results" class="hidden">
+      <div class="card">
+        <div class="results-header">
+          <h2>📊 Результаты анализа</h2>
+          <div class="results-actions">
+            <button class="btn btn-secondary" id="btnShareCard">📥 Скачать карточку</button>
+            <button class="btn btn-secondary" id="btnSaveToHistory">💾 В историю</button>
+          </div>
+        </div>
+
+        <!-- Verdict -->
+        <div id="overallVerdict" class="verdict verdict-green">
+          <div class="verdict-title" id="overallTitle">Анализ…</div>
+          <div class="verdict-body" id="overallBody">Ждём результатов…</div>
+          <div class="mini-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 12px">
+            <div class="mini-card">
+              <div class="mini-title">E-коды</div>
+              <div class="mini-value" id="metricEcodes">0</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-title">Аллергены</div>
+              <div class="mini-value" id="metricAllergens">0</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-title">Скрытые сахара</div>
+              <div class="mini-value" id="metricSugars">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- E-codes Table -->
+        <div id="ecodesTable" class="table hidden" style="margin-top: 16px">
+          <div style="padding: 10px; text-align: center; color: var(--muted)">Таблица E-кодов</div>
+        </div>
+
+        <!-- Allergens -->
+        <div id="allergensBlock" class="hidden" style="margin-top: 16px">
+          <h3>⚠️ Возможные аллергены</h3>
+          <div id="allergensContent" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;"></div>
+        </div>
+
+        <!-- Hidden Sugars -->
+        <div id="sugarsBlock" class="hidden" style="margin-top: 16px">
+          <h3>🍬 Скрытые сахара (эвристика)</h3>
+          <div id="sugarsContent" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;"></div>
+        </div>
+
+        <!-- Composition Snippet -->
+        <div style="margin-top: 16px">
+          <h3>Распознанный состав</h3>
+          <div id="compositionSnippet" class="snippet">—</div>
+        </div>
+
+        <!-- Nutrients & Traffic Light -->
+        <div style="margin-top: 16px">
+          <h3>🚦 Светофор: Сахар / Жир / Соль (на 100 г)</h3>
+          <p class="small muted">Введите значения из этикетки (или они уже распознаны выше). Таблица внизу показывает оценку.</p>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px">
+            <div class="field">
+              <label class="field-label">Сахар (г/100г)</label>
+              <input type="number" id="nutrSugar" placeholder="0" step="0.1" />
+            </div>
+            <div class="field">
+              <label class="field-label">Жир (г/100г)</label>
+              <input type="number" id="nutrFat" placeholder="0" step="0.1" />
+            </div>
+            <div class="field">
+              <label class="field-label">Соль (г/100г)</label>
+              <input type="number" id="nutrSalt" placeholder="0" step="0.1" />
+            </div>
+          </div>
+          
+          <button class="btn btn-primary" id="btnRecalc" style="margin-top: 10px">Пересчитать светофор</button>
+
+          <div class="traffic" style="margin-top: 16px">
+            <div class="traffic-item">
+              <div class="traffic-label">Сахар</div>
+              <div id="tlSugar" class="pill pill-unknown">—</div>
+            </div>
+            <div class="traffic-item">
+              <div class="traffic-label">Жир</div>
+              <div id="tlFat" class="pill pill-unknown">—</div>
+            </div>
+            <div class="traffic-item">
+              <div class="traffic-label">Соль</div>
+              <div id="tlSalt" class="pill pill-unknown">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div id="historyBlock" class="card hidden">
+        <h2>📜 История анализов</h2>
+        <div id="historyContent" style="display: flex; flex-direction: column; gap: 10px"></div>
+      </div>
+    </div>
+
+    <!-- About Dialog -->
+    <dialog id="aboutDialog" class="dialog">
+      <form method="dialog">
+        <h2>О LabelSpy Demo</h2>
+        <p>Это демонстрационный прототип веб‑приложения для анализа состава продуктов питания:</p>
+        <ul style="color: var(--muted)">
+          <li><strong>OCR в браузере</strong> через Tesseract.js (без отправки на сервер).</li>
+          <li><strong>E‑коды</strong> ищутся в локальной демо‑базе данных.</li>
+          <li><strong>Аллергены</strong> определяются по простым эвристикам.</li>
+          <li><strong>Светофор</strong> показывает уровень сахара/жира/соли на 100 г.</li>
+          <li><strong>PWA</strong> работает офлайн (кеширует локальные файлы).</li>
+        </ul>
+        <p class="small muted" style="margin-top: 14px">
+          <strong>⚠️ Важно:</strong> результаты носят информационный характер и не являются медицинской рекомендацией. Всегда проверяйте оригинальную этикетку.
+        </p>
+        <div class="dialog-actions">
+          <button class="btn btn-primary">Закрыть</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Footer -->
+    <div class="footer">
+      <details class="tips" open>
+        <summary><strong>💡 Советы</strong></summary>
+        <ul>
+          <li>Хорошего качества фото этикетки улучшит распознавание OCR.</li>
+          <li>Если OCR ошибся — отредактируйте текст вручную в поле выше.</li>
+          <li>Данные сохраняются локально в браузере (localStorage).</li>
+          <li>PWA позволяет использовать приложение офлайн.</li>
+          <li><a href="https://github.com/codgorbachev-art/labelspy-demo" target="_blank" rel="noopener noreferrer">GitHub репозиторий</a></li>
+        </ul>
+      </details>
+      <p style="margin-top: 14px">LabelSpy Demo • MIT License • v0.1.0</p>
+    </div>
+  </div>
+
+  <script>
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js').catch(err => console.warn('SW:', err));
+    }
+    // Set repo link
+    window.__LABELSPY_REPO = 'codgorbachev-art/labelspy-demo';
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
