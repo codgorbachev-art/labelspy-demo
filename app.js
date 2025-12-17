@@ -41,14 +41,12 @@
 
   githubLink.href = 'https://github.com/' + (window.__LABELSPY_REPO || '');
 
-  // 🌐 YANDEX OCR BACKEND ENDPOINT (API key secured in backend)
   const YANDEX_OCR_ENDPOINT = '/api/ocr';
 
   let eDb = {};
   let lastAnalysis = null;
   let lastImageDataUrl = null;
   const HISTORY_KEY = 'labelspy_v3_history';
-  const COMPARE_KEY = 'labelspy_v3_compare';
 
   async function loadDb() {
     try {
@@ -76,7 +74,6 @@
     });
   }
 
-  // 🌐 YANDEX OCR - Via Backend Proxy (Secure)
   async function recognizeWithYandex(imageDataUrl) {
     try {
       console.log('🌐 [Frontend] Starting Yandex OCR...');
@@ -85,14 +82,13 @@
         .split('+')
         .map(l => l.startsWith('rus') ? 'ru' : 'en');
 
-      console.log(`📸 [Frontend] Image size: ~${Math.round(imageDataUrl.length / 1024)}KB, Languages: ${languages}`);
+      console.log(`📸 [Frontend] Image size: ${Math.round(imageDataUrl.length / 1024)}KB, Languages: ${JSON.stringify(languages)}`);
       console.log('📤 [Frontend] Sending to /api/ocr...');
       
       const response = await fetch(YANDEX_OCR_ENDPOINT, {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           imageBase64: imageDataUrl,
@@ -102,35 +98,31 @@
 
       console.log(`📥 [Frontend] Response status: ${response.status}`);
 
-      if (!response.ok) {
-        let errorMsg = `HTTP ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMsg = errorData.error || errorMsg;
-        } catch (e) {
-          const text = await response.text();
-          if (text.includes('html') || text.includes('<!DOCTYPE')) {
-            errorMsg = '❌ Backend не расположен или переменные не установлены';
-          }
-        }
-        throw new Error(errorMsg);
-      }
-
+      // Parse response once
       const data = await response.json();
-      console.log('✅ [Frontend] OCR Result received');
+      console.log('[Frontend] Response body:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP ${response.status}: Backend error`);
+      }
 
       if (!data.success) {
-        throw new Error(data.error || 'OCR failed');
+        throw new Error(data.error || 'OCR failed (backend returned success=false)');
       }
 
+      if (!data.text) {
+        throw new Error('No text extracted from image');
+      }
+
+      console.log('✅ [Frontend] OCR succeeded, text length:', data.text.length);
       return data.text;
+      
     } catch (error) {
       console.error('❌ [Frontend] Yandex OCR error:', error);
       throw error;
     }
   }
 
-  // 🎨 Image Preprocessing
   async function preprocessImage(imageDataUrl) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -156,6 +148,7 @@
         ctx.putImageData(imageData, 0, 0);
         resolve(canvas.toDataURL());
       };
+      img.onerror = () => resolve(imageDataUrl);
       img.src = imageDataUrl;
     });
   }
@@ -235,15 +228,15 @@
   }
 
   const allergens = [
-    { label: '\u041c\u043e\u043b\u043e\u043a\u043e', patterns: ['\u043c\u043e\u043b\u043e\u043a', '\u043b\u0430\u043a\u0442\u043e\u0437', '\u043a\u0430\u0437\u0435\u0438\u043d'] },
-    { label: '\u0413\u043b\u044e\u0442\u0435\u043d', patterns: ['\u0433\u043b\u044e\u0442\u0435\u043d', '\u043f\u0448\u0435\u043d\u0438\u0446', '\u0440\u043e\u0436', '\u044f\u0447\u043c\u0435\u043d'] },
-    { label: '\u0421\u043e\u044f', patterns: ['\u0441\u043e\u044f', '\u0441\u043e\u0435\u0432'] },
-    { label: '\u042f\u0439\u0446\u0430', patterns: ['\u044f\u0438\u0446', '\u0430\u043b\u044c\u0431\u0443\u043c\u0438\u043d'] },
-    { label: '\u041e\u0440\u0435\u0445\u0438', patterns: ['\u043e\u0440\u0435\u0445', '\u043c\u0438\u043d\u0434\u0430\u043b', '\u0444\u0443\u043d\u0434\u0443\u043a'] },
-    { label: '\u0420\u044b\u0431\u0430', patterns: ['\u0440\u044b\u0431', '\u043b\u043e\u0441\u043e\u0441'] }
+    { label: '🥛 Молоко', patterns: ['молоко', 'лактоз', 'казеин'] },
+    { label: '🌾 Глютен', patterns: ['глютен', 'пшениц', 'рож', 'ячмен'] },
+    { label: '🫘 Соя', patterns: ['соя', 'соев'] },
+    { label: '🥚 Яйца', patterns: ['яиц', 'альбумин'] },
+    { label: '🥜 Орехи', patterns: ['орех', 'миндал', 'фундук'] },
+    { label: '🐟 Рыба', patterns: ['рыб', 'лосос'] }
   ];
 
-  const hiddenSugars = ['\u0433\u043b\u044e\u043a\u043e\u0437\u043d\u044b\u0439 \u0441\u0438\u0440\u043e\u043f', '\u0444\u0440\u0443\u043a\u0442\u043e\u0437\u043d\u044b\u0439 \u0441\u0438\u0440\u043e\u043f', '\u043c\u0430\u043b\u044c\u0442\u043e\u0434\u0435\u043a\u0441\u0442\u0440\u0438\u043d', '\u043f\u0430\u0442\u043e\u043a\u0430'];
+  const hiddenSugars = ['глюкозный сироп', 'фруктозный сироп', 'мальтодекстрин', 'патока'];
 
   function detectAllergens(text) {
     const t = (text || '').toLowerCase();
@@ -271,10 +264,10 @@
   };
 
   function classifyTraffic(value, th) {
-    if (!Number.isFinite(value)) return { level: 'unknown', label: '\u2014' };
-    if (value <= th.lowMax) return { level: 'green', label: `\u043d\u0438\u0437\u043a. (${value})` };
-    if (value > th.highMin) return { level: 'red', label: `\u0432\u044b\u0441\u043e\u043a. (${value})` };
-    return { level: 'yellow', label: `\u0441\u0440\u0435\u0434. (${value})` };
+    if (!Number.isFinite(value)) return { level: 'unknown', label: '—' };
+    if (value <= th.lowMax) return { level: 'green', label: `низк. (${value})` };
+    if (value > th.highMin) return { level: 'red', label: `высок. (${value})` };
+    return { level: 'yellow', label: `сред. (${value})` };
   }
 
   function setPill(el, cls, text) {
@@ -284,15 +277,15 @@
 
   function computeOverallVerdict(eItems, allergenList, sugarHints, tl) {
     let score = 100;
-    for (const item of eItems) score -= (item.attention === '\u0432\u044b\u0441\u043e\u043a\u0438\u0439' ? 15 : 5);
+    for (const item of eItems) score -= (item.attention === 'высокий' ? 15 : 5);
     score -= allergenList.length * 8;
     score -= sugarHints.length * 6;
     const penalty = lvl => lvl === 'red' ? 20 : (lvl === 'yellow' ? 10 : 0);
     score -= penalty(tl.sugar.level) + penalty(tl.fat.level) + penalty(tl.salt.level);
     score = Math.max(0, Math.min(100, score));
-    if (score >= 75) return { color: 'green', title: '\u2705 \u0417\u0435\u043b\u0451\u043d\u0430\u044f', body: '\u041d\u0435\u0439\u0442\u0440\u0430\u043b\u044c\u043d\u044b\u0439 \u0441\u043e\u0441\u0442\u0430\u0432' };
-    if (score >= 45) return { color: 'yellow', title: '\u26a0\ufe0f \u0416\u0451\u043b\u0442\u0430\u044f', body: '\u041d\u0435\u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u0440\u0438\u0441\u043a\u0438' };
-    return { color: 'red', title: '\ud83d\udeab \u041a\u0440\u0430\u0441\u043d\u0430\u044f', body: '\u041c\u043d\u043e\u0433\u043e \u0432\u043d\u0438\u043c\u0430\u043d\u0438\u044f' };
+    if (score >= 75) return { color: 'green', title: '✅ Зелёная', body: 'Нейтральный состав' };
+    if (score >= 45) return { color: 'yellow', title: '⚠️ Жёлтая', body: 'Некоторые риски' };
+    return { color: 'red', title: '🚫 Красная', body: 'Много внимания' };
   }
 
   function setVerdict(v) {
@@ -312,7 +305,7 @@
     historyBlock.classList.remove('hidden');
     historyContent.innerHTML = history.slice(0, 5).map((item, idx) => `
       <div class="history-item">
-        <strong>\ud83d\udcca #${history.length - idx}</strong>
+        <strong>📊 #${history.length - idx}</strong>
         <span class="pill pill-${item.verdict?.color}">${item.verdict?.title}</span>
       </div>
     `).join('');
@@ -320,7 +313,7 @@
 
   async function generatePDFReport() {
     if (!lastAnalysis || !window.jspdf) {
-      alert('\u26a0\ufe0f \u041d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445');
+      alert('⚠️ Нет данных');
       return;
     }
     try {
@@ -328,10 +321,10 @@
       const doc = new jsPDF();
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
-      doc.text('LabelSpy - \u041e\u0442\u0447\u0435\u0442', 20, 20);
+      doc.text('LabelSpy - Отчет', 20, 20);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(lastAnalysis.ecodes.join(', ') || '\u041d\u0435\u0442', 20, 40);
+      doc.text(lastAnalysis.ecodes.join(', ') || 'Нет', 20, 40);
       doc.save(`labelspy-${Date.now()}.pdf`);
     } catch (e) {
       console.error('PDF error:', e);
@@ -353,27 +346,39 @@
     btnYandexOcr.disabled = true;
     ocrStatus.classList.remove('hidden');
     try {
-      setOcrProgress(0.1, '\ud83c\udf10 \u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430...');
+      setOcrProgress(0.2, '🔄 Подготовка...');
+      setOcrProgress(0.5, '📤 Отправка на Yandex...');
       const text = await recognizeWithYandex(lastImageDataUrl);
-      setOcrProgress(0.9, '\u2728 \u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430...');
+      setOcrProgress(0.9, '✨ Обработка...');
       textInput.value = cleanOCRText(text);
-      setOcrProgress(1, '\u2705 \u0413\u043e\u0442\u043e\u0432\u043e!');
+      setOcrProgress(1, '✅ Готово!');
       setTimeout(() => ocrStatus.classList.add('hidden'), 800);
     } catch (e) {
       ocrStatus.classList.add('hidden');
-      alert(`\u274c ${e.message}\n\n\ud83d\udca1 \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439:\n- \u041f\u0440\u043e\u0432\u0435\u0440\u044c \u0438\u043d\u0442\u0435\u0440\u043d\u0435\u0442\n- \u041d\u0430\u0441\u0442\u0440\u043e\u0439 backend`);
+      console.error('Full error:', e);
+      let userMsg = e.message;
+      if (userMsg.includes('Configuration')) {
+        userMsg = '⚙️ Backend не настроен.\nУстанови переменные на Vercel:\nYANDEX_API_KEY\nYANDEX_FOLDER_ID';
+      } else if (userMsg.includes('401') || userMsg.includes('Unauthorized')) {
+        userMsg = '🔑 Неверный API Key.\nПроверь YANDEX_API_KEY на Vercel';
+      } else if (userMsg.includes('403') || userMsg.includes('Forbidden')) {
+        userMsg = '🚫 Неверный Folder ID.\nПроверь YANDEX_FOLDER_ID на Vercel';
+      } else if (userMsg.includes('HTTP') || userMsg.includes('405')) {
+        userMsg = '❌ Backend недоступен или ошибка.\nПроверь:\n- интернет\n- Vercel deployment\n- консоль (F12)';
+      }
+      alert(`Ошибка OCR:\n${userMsg}`);
     }
     btnYandexOcr.disabled = false;
   });
 
   btnUseSample.addEventListener('click', () => {
-    textInput.value = '\u0421\u043e\u0441\u0442\u0430\u0432: \u0432\u043e\u0434\u0430, \u043f\u0448\u0435\u043d\u0438\u0446\u0430, \u0441\u0430\u0445\u0430\u0440, \u043c\u043e\u043b\u043e\u043a\u043e, E621, E330. \u041f\u0438\u0449\u0435\u0432\u0430\u044f \u0446\u0435\u043d\u043d\u043e\u0441\u0442\u044c: \u0441\u0430\u0445\u0430\u0440 15\u0433, \u0436\u0438\u0440\u044b 8\u0433, \u0441\u043e\u043b\u044c 0.5\u0433.';
+    textInput.value = 'Состав: вода, пшеница, сахара, молоко, E621, E330. Пищевая ценность: сахара 15г, жиры 8г, соль 0.5г.';
   });
 
   btnAnalyze.addEventListener('click', async () => {
     const text = textInput.value.trim();
     if (!text) {
-      alert('\u26a0\ufe0f \u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0442\u0435\u043a\u0441\u0442');
+      alert('⚠️ Введите текст');
       return;
     }
 
@@ -415,10 +420,10 @@
       ecodesTable.classList.remove('hidden');
       const rows = ecodes.map(code => {
         const item = eDb[code] || {};
-        const cls = item.attention === '\u0432\u044b\u0441\u043e\u043a\u0438\u0439' ? 'badge-high' : 'badge-low';
+        const cls = item.attention === 'высокий' ? 'badge-high' : 'badge-low';
         return `<tr><td>${code}</td><td>${item.name_ru || code}</td><td><span class="badge ${cls}">${item.attention || '?'}</span></td></tr>`;
       }).join('');
-      ecodesTable.innerHTML = `<table><thead><tr><th>\u041a\u043e\u0434</th><th>\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435</th><th>\u041e\u0446\u0435\u043d\u043a\u0430</th></tr></thead><tbody>${rows}</tbody></table>`;
+      ecodesTable.innerHTML = `<table><thead><tr><th>Код</th><th>Название</th><th>Оценка</th></tr></thead><tbody>${rows}</tbody></table>`;
     } else {
       ecodesTable.classList.add('hidden');
     }
@@ -454,13 +459,13 @@
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
     loadHistory();
   });
-  if (btnCompare) btnCompare.addEventListener('click', () => { if (lastAnalysis) alert('\u2705 \u0414\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e'); });
+  if (btnCompare) btnCompare.addEventListener('click', () => { if (lastAnalysis) alert('✅ Добавлено'); });
   if (btnOpenAbout) btnOpenAbout.addEventListener('click', () => aboutDialog.showModal());
 
   loadDb();
   loadHistory();
 
-  console.log('\ud83c\udf10 LabelSpy 3.0 - Yandex OCR Backend');
-  console.log('\u2705 Secure API - no keys in frontend');
-  console.log('\ud83d\udce1 Endpoint: /api/ocr');
+  console.log('🌐 LabelSpy 3.0 - Yandex OCR Backend');
+  console.log('✅ Secure API - no keys in frontend');
+  console.log('📡 Endpoint: /api/ocr');
 })();
