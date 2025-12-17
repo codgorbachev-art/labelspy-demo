@@ -1,10 +1,17 @@
 {
+  "version": 2,
   "functions": {
     "api/ocr.js": {
       "memory": 512,
-      "maxDuration": 30
+      "maxDuration": 30,
+      "runtime": "nodejs18.x"
     }
   },
-  "redirects": [],
-  "rewrites": []
+  "env": {},
+  "build": {
+    "env": {
+      "YANDEX_API_KEY": "@yandex_api_key",
+      "YANDEX_FOLDER_ID": "@yandex_folder_id"
+    }
+  }
 }
