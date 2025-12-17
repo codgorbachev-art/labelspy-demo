@@ -1,87 +1,90 @@
 /**
- * Yandex OCR Backend Proxy
- * 🔑 SECURITY: API key stored as environment variable YANDEX_API_KEY
- * 🛨️ FUNCTION: Accepts base64 image, calls Yandex OCR, returns text
+ * 🔐 Yandex OCR Backend Proxy
+ * - Receives image (base64 or URL-encoded)
+ * - Calls Yandex Cloud OCR API
+ * - Returns extracted text or error
+ * - API KEY stored in env variables (never exposed to frontend)
  */
 
-const YANDEX_OCR_ENDPOINT = 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText';
-const YANDEX_API_KEY = process.env.YANDEX_API_KEY;
-const FOLDER_ID = process.env.YANDEX_FOLDER_ID;
+const YANDEX_OCR_URL = 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText';
 
-if (!YANDEX_API_KEY || !FOLDER_ID) {
-  console.error('⚠️ Missing YANDEX_API_KEY or YANDEX_FOLDER_ID environment variables');
-}
+async function callYandexOCR(base64Content, languages) {
+  const apiKey = process.env.YANDEX_API_KEY;
+  const folderId = process.env.YANDEX_FOLDER_ID;
 
-async function recognizeText(imageContent, languages = ['ru', 'en']) {
+  if (!apiKey || !folderId) {
+    throw new Error('⚠️ Backend Configuration Error: Missing YANDEX_API_KEY or YANDEX_FOLDER_ID');
+  }
+
   try {
-    console.log('📤 [Backend] Sending to Yandex OCR...');
-    
-    const requestBody = {
+    console.log('[Backend] 📤 Calling Yandex OCR API...');
+
+    const payload = {
       mimeType: 'image/jpeg',
-      languageCodes: languages,
-      content: imageContent // Base64 string WITHOUT data URL prefix
+      languageCodes: Array.isArray(languages) ? languages : ['ru', 'en'],
+      content: base64Content
     };
 
-    const response = await fetch(YANDEX_OCR_ENDPOINT, {
+    const response = await fetch(YANDEX_OCR_URL, {
       method: 'POST',
+      timeout: 25000,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Api-Key ${YANDEX_API_KEY}`,
-        'x-folder-id': FOLDER_ID
+        'Authorization': `Api-Key ${apiKey}`,
+        'x-folder-id': folderId
       },
-      body: JSON.stringify(requestBody),
-      timeout: 25000 // 25 sec timeout
+      body: JSON.stringify(payload)
     });
 
-    console.log(`📥 [Backend] Response status: ${response.status}`);
+    console.log(`[Backend] 📥 Yandex responded: ${response.status}`);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [Backend] Yandex API Error:', errorText);
-      throw new Error(`Yandex API Error: ${response.status} - ${errorText}`);
+      let errorMsg = `HTTP ${response.status}`;
+      try {
+        const errorBody = await response.json();
+        errorMsg = errorBody.message || errorBody.error || errorMsg;
+      } catch (e) {
+        const textErr = await response.text();
+        if (textErr.includes('Unauthorized')) errorMsg = 'Invalid API Key';
+        if (textErr.includes('Forbidden')) errorMsg = 'Invalid Folder ID';
+      }
+      throw new Error(errorMsg);
     }
 
-    const data = await response.json();
-    console.log('✅ [Backend] OCR Response received');
+    const result = await response.json();
+    console.log('[Backend] ✅ OCR Result received');
 
-    // Extract text from Yandex response
-    let recognizedText = '';
-    
-    if (data.textAnnotation && data.textAnnotation.text) {
-      recognizedText = data.textAnnotation.text;
-    } else if (data.blocks) {
-      // Extract text from blocks structure
-      recognizedText = data.blocks
-        .flatMap(block => block.lines || [])
-        .flatMap(line => line.words || [])
-        .map(word => word.text || '')
+    // Parse Yandex response
+    let extractedText = '';
+
+    if (result.textAnnotation?.text) {
+      extractedText = result.textAnnotation.text;
+    } else if (result.blocks) {
+      extractedText = result.blocks
+        .flatMap(b => b.lines || [])
+        .flatMap(l => l.words || [])
+        .map(w => w.text)
+        .filter(Boolean)
         .join(' ');
     }
 
-    console.log('✅ [Backend] Text extracted:', recognizedText.substring(0, 100) + '...');
-
     return {
       success: true,
-      text: recognizedText.trim(),
-      confidence: data.textAnnotation?.confidence || null
+      text: extractedText.trim(),
+      confidence: result.textAnnotation?.confidence || 0.9
     };
-
-  } catch (error) {
-    console.error('❌ [Backend] OCR Error:', error);
-    throw error;
+  } catch (err) {
+    console.error('[Backend] ❌ Yandex OCR Error:', err.message);
+    throw err;
   }
 }
 
-// Vercel Serverless Function
+// Vercel Serverless Handler
 export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // 🔓 CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // Handle preflight
   if (req.method === 'OPTIONS') {
@@ -89,35 +92,59 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Only POST allowed
+  // Only POST
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
+    return res.status(405).json({
+      success: false,
+      error: 'Only POST method allowed'
+    });
   }
 
   try {
     const { imageBase64, languages } = req.body;
 
-    if (!imageBase64) {
-      res.status(400).json({ error: 'Missing imageBase64' });
-      return;
+    // Validate input
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing or invalid imageBase64'
+      });
     }
 
-    // Remove data URL prefix if present
+    console.log('[Backend] 📨 Request received');
+    console.log(`[Backend] 📏 Image size: ${Math.round(imageBase64.length / 1024)}KB`);
+
+    // Extract base64 from data URL if needed
     let base64Data = imageBase64;
-    if (base64Data.includes(',')) {
-      base64Data = base64Data.split(',')[1];
+    if (base64Data.startsWith('data:')) {
+      const match = base64Data.match(/,(.+)$/);
+      if (!match) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid data URL format'
+        });
+      }
+      base64Data = match[1];
     }
 
-    const result = await recognizeText(base64Data, languages || ['ru', 'en']);
-    
-    res.status(200).json(result);
+    // Call Yandex OCR
+    const ocrResult = await callYandexOCR(base64Data, languages);
+
+    console.log('[Backend] ✅ Sending response to frontend');
+    return res.status(200).json(ocrResult);
 
   } catch (error) {
-    console.error('❌ [Backend] Handler Error:', error);
-    res.status(500).json({
+    console.error('[Backend] ❌ Handler error:', error.message);
+
+    // Distinguish between setup errors and API errors
+    const statusCode = error.message.includes('Configuration') ? 500 : 500;
+    const errorMsg = error.message.includes('Configuration')
+      ? '⚙️ Backend не настроен. Установи YANDEX_API_KEY и YANDEX_FOLDER_ID в Vercel'
+      : error.message;
+
+    return res.status(statusCode).json({
       success: false,
-      error: error.message || 'OCR processing failed'
+      error: errorMsg
     });
   }
 }
