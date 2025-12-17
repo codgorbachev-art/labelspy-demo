@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/ocr.js": {
+      "memory": 512,
+      "maxDuration": 30
+    }
+  },
+  "redirects": [],
+  "rewrites": []
+}
