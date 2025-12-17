@@ -1,28 +1,38 @@
 /**
- * 🔐 Yandex OCR Backend Proxy
- * - Receives image (base64 or URL-encoded)
- * - Calls Yandex Cloud OCR API
- * - Returns extracted text or error
- * - API KEY stored in env variables (never exposed to frontend)
+ * 🔐 Yandex OCR Backend Proxy v2
+ * - Enhanced debugging
+ * - Better error messages
+ * - Fixed deployment issues
  */
 
 const YANDEX_OCR_URL = 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText';
 
 async function callYandexOCR(base64Content, languages) {
-  const apiKey = process.env.YANDEX_API_KEY;
-  const folderId = process.env.YANDEX_FOLDER_ID;
+  const apiKey = process.env.YANDEX_API_KEY?.trim();
+  const folderId = process.env.YANDEX_FOLDER_ID?.trim();
 
-  if (!apiKey || !folderId) {
-    throw new Error('⚠️ Backend Configuration Error: Missing YANDEX_API_KEY or YANDEX_FOLDER_ID');
+  console.log('[Backend] 🔍 Checking credentials...');
+  console.log('[Backend] API Key exists:', !!apiKey);
+  console.log('[Backend] Folder ID exists:', !!folderId);
+
+  if (!apiKey) {
+    console.error('[Backend] ❌ YANDEX_API_KEY not set');
+    throw new Error('Missing YANDEX_API_KEY');
+  }
+  if (!folderId) {
+    console.error('[Backend] ❌ YANDEX_FOLDER_ID not set');
+    throw new Error('Missing YANDEX_FOLDER_ID');
   }
 
   try {
-    console.log('[Backend] 📤 Calling Yandex OCR API...');
+    console.log('[Backend] 📤 Calling Yandex OCR...');
+    console.log('[Backend] URL:', YANDEX_OCR_URL);
+    console.log('[Backend] Languages:', languages);
 
     const payload = {
       mimeType: 'image/jpeg',
       languageCodes: Array.isArray(languages) ? languages : ['ru', 'en'],
-      content: base64Content
+      content: base64Content.substring(0, 100) + '...' // Log preview
     };
 
     const response = await fetch(YANDEX_OCR_URL, {
@@ -33,28 +43,38 @@ async function callYandexOCR(base64Content, languages) {
         'Authorization': `Api-Key ${apiKey}`,
         'x-folder-id': folderId
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        mimeType: 'image/jpeg',
+        languageCodes: Array.isArray(languages) ? languages : ['ru', 'en'],
+        content: base64Content
+      })
     });
 
-    console.log(`[Backend] 📥 Yandex responded: ${response.status}`);
+    console.log(`[Backend] 📥 Yandex response: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
       let errorMsg = `HTTP ${response.status}`;
+      let errorBody = null;
+      
       try {
-        const errorBody = await response.json();
+        errorBody = await response.json();
         errorMsg = errorBody.message || errorBody.error || errorMsg;
       } catch (e) {
-        const textErr = await response.text();
-        if (textErr.includes('Unauthorized')) errorMsg = 'Invalid API Key';
-        if (textErr.includes('Forbidden')) errorMsg = 'Invalid Folder ID';
+        try {
+          const textErr = await response.text();
+          if (textErr.includes('Unauthorized')) errorMsg = 'API Key Invalid (401)';
+          else if (textErr.includes('Forbidden')) errorMsg = 'Folder ID Invalid (403)';
+          else errorMsg = `Error: ${response.status}`;
+        } catch (e2) {}
       }
+      
+      console.error('[Backend] ❌ Yandex Error:', errorMsg);
       throw new Error(errorMsg);
     }
 
     const result = await response.json();
-    console.log('[Backend] ✅ OCR Result received');
+    console.log('[Backend] ✅ OCR Success, parsing...');
 
-    // Parse Yandex response
     let extractedText = '';
 
     if (result.textAnnotation?.text) {
@@ -68,53 +88,60 @@ async function callYandexOCR(base64Content, languages) {
         .join(' ');
     }
 
+    console.log('[Backend] ✅ Text extracted, length:', extractedText.length);
+
     return {
       success: true,
-      text: extractedText.trim(),
+      text: extractedText.trim() || 'No text detected',
       confidence: result.textAnnotation?.confidence || 0.9
     };
   } catch (err) {
-    console.error('[Backend] ❌ Yandex OCR Error:', err.message);
+    console.error('[Backend] ❌ Error:', err.message);
     throw err;
   }
 }
 
 // Vercel Serverless Handler
 export default async function handler(req, res) {
-  // 🔓 CORS
+  console.log(`[Backend] 📨 ${req.method} ${req.url}`);
+
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Content-Type', 'application/json');
 
-  // Handle preflight
+  // Preflight
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    console.log('[Backend] ✅ Preflight OK');
+    return res.status(200).end();
   }
 
   // Only POST
   if (req.method !== 'POST') {
+    console.log('[Backend] ❌ Method not allowed:', req.method);
     return res.status(405).json({
       success: false,
-      error: 'Only POST method allowed'
+      error: `Method ${req.method} not allowed. Use POST.`
     });
   }
 
   try {
-    const { imageBase64, languages } = req.body;
+    const { imageBase64, languages } = req.body || {};
 
-    // Validate input
+    console.log('[Backend] 📋 Body received, imageBase64 exists:', !!imageBase64);
+
     if (!imageBase64 || typeof imageBase64 !== 'string') {
+      console.log('[Backend] ❌ Invalid imageBase64');
       return res.status(400).json({
         success: false,
-        error: 'Missing or invalid imageBase64'
+        error: 'Missing or invalid imageBase64 in request body'
       });
     }
 
-    console.log('[Backend] 📨 Request received');
     console.log(`[Backend] 📏 Image size: ${Math.round(imageBase64.length / 1024)}KB`);
 
-    // Extract base64 from data URL if needed
+    // Extract base64
     let base64Data = imageBase64;
     if (base64Data.startsWith('data:')) {
       const match = base64Data.match(/,(.+)$/);
@@ -127,24 +154,28 @@ export default async function handler(req, res) {
       base64Data = match[1];
     }
 
-    // Call Yandex OCR
+    // Call Yandex
     const ocrResult = await callYandexOCR(base64Data, languages);
 
-    console.log('[Backend] ✅ Sending response to frontend');
+    console.log('[Backend] ✅ Returning result to frontend');
     return res.status(200).json(ocrResult);
 
   } catch (error) {
-    console.error('[Backend] ❌ Handler error:', error.message);
+    console.error('[Backend] 💥 HANDLER ERROR:', error);
+    console.error('[Backend] Stack:', error.stack);
 
-    // Distinguish between setup errors and API errors
-    const statusCode = error.message.includes('Configuration') ? 500 : 500;
-    const errorMsg = error.message.includes('Configuration')
-      ? '⚙️ Backend не настроен. Установи YANDEX_API_KEY и YANDEX_FOLDER_ID в Vercel'
-      : error.message;
+    let statusCode = 500;
+    let errorMsg = error.message || 'Unknown error';
+
+    if (errorMsg.includes('Missing')) {
+      statusCode = 500;
+      errorMsg = '⚙️ Backend Configuration Error: ' + errorMsg;
+    }
 
     return res.status(statusCode).json({
       success: false,
-      error: errorMsg
+      error: errorMsg,
+      debug: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
