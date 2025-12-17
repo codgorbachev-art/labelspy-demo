@@ -42,23 +42,9 @@
 
   githubLink.href = 'https://github.com/' + (window.__LABELSPY_REPO || '');
 
-  // 🔑 Google Gemini API Key - UPDATED
+  // 🔑 Google Gemini API - DIRECT CONNECTION (NO PROXY)
   const GEMINI_API_KEY = 'AIzaSyD7rJr-s6FcRTauf278OAM5iqUDE7EQFeQ';
   const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-  
-  // 🌐 WORKING CORS Proxies for Russia (Tested Dec 2025)
-  const CORS_PROXIES = [
-    // 1. DIRECT CALL (иногда работает из РФ)
-    null,
-    // 2. Cloudflare Workers CORS Proxy (fast, reliable)
-    'https://corsproxy.io/?',
-    // 3. Worker-based (GitHub recommended)
-    'https://api.codetabs.com/v1/proxy?quest=',
-    // 4. AllOrigins fallback
-    'https://api.allorigins.win/raw?url=',
-  ];
-  
-  let currentProxyIndex = 0;
 
   let eDb = {};
   let lastAnalysis = null;
@@ -70,8 +56,9 @@
     try {
       const res = await fetch('./data/e_additives_ru.json', { cache: 'no-cache' });
       eDb = await res.json();
+      console.log('✅ Database loaded:', Object.keys(eDb).length, 'E-codes');
     } catch (e) {
-      console.error('DB load error:', e);
+      console.error('❌ DB load error:', e);
       eDb = {};
     }
   }
@@ -91,59 +78,15 @@
     });
   }
 
-  // 🌐 Smart Proxy Fallback with Direct Call First
-  async function fetchWithProxyFallback(url, options = {}, tryCount = 0) {
-    if (tryCount >= CORS_PROXIES.length) {
-      throw new Error('❌ Все прокси недоступны. Попробуйте позже или используйте VPN.');
-    }
-    
-    const proxy = CORS_PROXIES[tryCount];
-    const finalUrl = proxy ? proxy + encodeURIComponent(url) : url;
-    
-    const proxyName = proxy ? `Proxy ${tryCount}` : 'Прямое соединение';
-    console.log(`🌐 [${tryCount + 1}/${CORS_PROXIES.length}] ${proxyName}:`, proxy || 'Direct');
-    
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 sec timeout
-      
-      const response = await fetch(finalUrl, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          ...options.headers,
-          'User-Agent': 'LabelSpy/3.0'
-        }
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (response.ok) {
-        console.log(`✅ ${proxyName} работает!`);
-        currentProxyIndex = tryCount;
-        return response;
-      }
-      
-      console.warn(`⚠️ ${proxyName} вернул ${response.status}`);
-      throw new Error(`HTTP ${response.status}`);
-    } catch (error) {
-      console.error(`❌ ${proxyName} failed:`, error.message);
-      
-      // Try next proxy
-      if (tryCount < CORS_PROXIES.length - 1) {
-        console.log(`🔄 Переключаюсь на следующий прокси...`);
-        return fetchWithProxyFallback(url, options, tryCount + 1);
-      }
-      
-      throw error;
-    }
-  }
-
-  // 🤖 GEMINI VISION OCR with enhanced prompts
+  // 🤖 GEMINI VISION OCR - DIRECT API CALL
   async function recognizeWithGemini(imageDataUrl) {
     try {
+      console.log('🤖 Starting Gemini Vision OCR...');
+      
       const base64Data = imageDataUrl.split(',')[1];
       const mimeType = imageDataUrl.match(/data:(.*?);/)?.[1] || 'image/jpeg';
+
+      console.log(`📸 Image type: ${mimeType}, Base64 length: ${base64Data.length}`);
 
       const requestBody = {
         contents: [{
@@ -182,19 +125,36 @@
         }
       };
 
-      const response = await fetchWithProxyFallback(GEMINI_API_URL, {
+      console.log('📤 Sending to Gemini API...');
+      
+      const response = await fetch(GEMINI_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(requestBody)
       });
 
+      console.log(`📥 Response status: ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Gemini API Error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const data = await response.json();
       
+      console.log('✅ Response received:', data);
+
       if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        console.error('❌ Invalid response structure:', data);
         throw new Error('Invalid Gemini response structure');
       }
 
       const text = data.candidates[0].content.parts[0].text;
+      console.log('✅ OCR Result:', text.substring(0, 100) + '...');
       return text.trim();
     } catch (error) {
       console.error('❌ Gemini OCR error:', error);
@@ -202,9 +162,11 @@
     }
   }
 
-  // 🧠 GEMINI ANALYTICS with detailed recommendations
+  // 🧠 GEMINI ANALYTICS - DIRECT API CALL
   async function analyzeWithGemini(compositionText) {
     try {
+      console.log('🧠 Starting Gemini Analysis...');
+      
       const requestBody = {
         contents: [{
           parts: [{ 
@@ -243,16 +205,31 @@ ${compositionText}
         }
       };
 
-      const response = await fetchWithProxyFallback(GEMINI_API_URL, {
+      console.log('📤 Sending analysis to Gemini...');
+      
+      const response = await fetch(GEMINI_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(requestBody)
       });
 
+      console.log(`📥 Analysis response status: ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Analysis error:', errorText);
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const data = await response.json();
+      console.log('✅ Analysis complete:', data);
+      
       return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
     } catch (error) {
-      console.error('Gemini analytics error:', error);
+      console.error('❌ Gemini analysis error:', error);
       return null;
     }
   }
@@ -502,7 +479,6 @@ ${compositionText}
     `).join('');
   }
 
-  // 📄 Generate PDF Report with jsPDF
   async function generatePDFReport() {
     if (!lastAnalysis || typeof jspdf === 'undefined') {
       alert('⚠️ Нет данных для отчета или PDF библиотека не загружена');
@@ -577,6 +553,7 @@ ${compositionText}
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    console.log('📁 File selected:', file.name, file.size, 'bytes');
     lastImageDataUrl = await toDataUrl(file);
     imgPreview.src = lastImageDataUrl;
     imgPreview.style.display = 'block';
@@ -585,7 +562,6 @@ ${compositionText}
     if (btnGeminiOcr) btnGeminiOcr.disabled = false;
   });
 
-  // Tesseract OCR
   btnOcr.addEventListener('click', async () => {
     if (!lastImageDataUrl) return;
     btnOcr.disabled = true;
@@ -616,25 +592,25 @@ ${compositionText}
     btnOcr.disabled = false;
   });
 
-  // Gemini Vision OCR
   if (btnGeminiOcr) {
     btnGeminiOcr.addEventListener('click', async () => {
       if (!lastImageDataUrl) return;
       btnGeminiOcr.disabled = true;
       ocrStatus.classList.remove('hidden');
       try {
+        setOcrProgress(0.1, '🤖 Загрузка изображения...');
         setOcrProgress(0.2, '🤖 Отправка в Gemini...');
         const text = await recognizeWithGemini(lastImageDataUrl);
         
-        setOcrProgress(0.9, '✨ Обработка...');
+        setOcrProgress(0.9, '✨ Обработка результата...');
         textInput.value = cleanOCRText(text);
         
-        setOcrProgress(1, '✅ Gemini распознал идеально!');
-        setTimeout(() => ocrStatus.classList.add('hidden'), 800);
+        setOcrProgress(1, '✅ Gemini распознал успешно!');
+        setTimeout(() => ocrStatus.classList.add('hidden'), 1000);
       } catch (e) {
         console.error('Gemini Error:', e);
         ocrStatus.classList.add('hidden');
-        alert(`❌ Ошибка Gemini: ${e.message}\n\n💡 Попробуйте:\n1. Еще раз (другой прокси)\n2. Tesseract OCR\n3. VPN`);
+        alert(`❌ Ошибка Gemini:\n${e.message}\n\n💡 Решения:\n- Проверьте интернет\n- Используйте VPN\n- Попробуйте Tesseract OCR`);
       }
       btnGeminiOcr.disabled = false;
     });
@@ -680,7 +656,6 @@ ${compositionText}
     metricSugars.textContent = hidden_sugars.length;
     compositionSnippet.textContent = compositionBlock || '—';
 
-    // 🧠 AI Analysis
     if (compositionBlock) {
       const aiAnalysis = $('#aiAnalysis');
       if (aiAnalysis) {
@@ -696,6 +671,7 @@ ${compositionText}
             aiAnalysis.classList.add('hidden');
           }
         } catch (e) {
+          console.error('AI Analysis Error:', e);
           aiAnalysis.classList.add('hidden');
         }
       }
@@ -777,12 +753,11 @@ ${compositionText}
     btnOpenAbout.addEventListener('click', () => aboutDialog.showModal());
   }
 
-  // Initialize
   loadDb();
   loadHistory();
 
-  console.log('🔍 LabelSpy 3.0 loaded!');
-  console.log('🌐 CORS Proxies:', CORS_PROXIES.length);
-  console.log('🎯 Strategy: Direct → Cloudflare → CodeTabs → AllOrigins');
-  console.log('🔑 Gemini API Key: UPDATED');
+  console.log('🎯 LabelSpy 3.0 - DIRECT GEMINI CONNECTION');
+  console.log('✅ No proxies - Direct API calls only');
+  console.log('🔑 API Key:', GEMINI_API_KEY.substring(0, 10) + '***');
+  console.log('📡 API URL:', GEMINI_API_URL.split('?')[0]);
 })();
