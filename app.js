@@ -42,8 +42,8 @@
 
   githubLink.href = 'https://github.com/' + (window.__LABELSPY_REPO || '');
 
-  // 🔑 Google Gemini API Key
-  const GEMINI_API_KEY = 'AIzaSyAh-NcbJIlwHQ8v5UJLfXPBCHbZqC03xwo';
+  // 🔑 Google Gemini API Key - UPDATED
+  const GEMINI_API_KEY = 'AIzaSyD7rJr-s6FcRTauf278OAM5iqUDE7EQFeQ';
   const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
   // 🌐 WORKING CORS Proxies for Russia (Tested Dec 2025)
@@ -784,4 +784,5 @@ ${compositionText}
   console.log('🔍 LabelSpy 3.0 loaded!');
   console.log('🌐 CORS Proxies:', CORS_PROXIES.length);
   console.log('🎯 Strategy: Direct → Cloudflare → CodeTabs → AllOrigins');
+  console.log('🔑 Gemini API Key: UPDATED');
 })();
