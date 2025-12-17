@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="description" content="LabelSpy 3.0 — AI-анализ пищевых этикеток. Gemini Vision OCR 99%, работает из России через CORS Proxy" />
+  <meta name="description" content="LabelSpy 3.0 — AI-анализ пищевых этикеток. Yandex OCR через secure backend" />
   <meta name="theme-color" content="#0b1320" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -39,7 +39,7 @@
       <div class="upload">
         <p class="muted small">Загрузите фото этикетки</p>
         <input type="file" id="fileInput" accept="image/*" capture="environment" />
-        <div class="upload-help">🌐 <strong>Gemini работает из РФ</strong> через Multi-Proxy!</div>
+        <div class="upload-help">🌐 <strong>Yandex OCR</strong> с защищённым backend API</div>
       </div>
 
       <div class="preview-row">
@@ -62,25 +62,14 @@
             </select>
           </div>
           
-          <div class="ocr-buttons">
-            <button class="btn btn-primary" id="btnOcr" disabled>
-              <span class="btn-icon">🔍</span>
-              <span>Tesseract</span>
-            </button>
-            <button class="btn btn-gemini" id="btnGeminiOcr" disabled>
-              <span class="btn-icon">🤖</span>
-              <span>Gemini</span>
-            </button>
-          </div>
-          
-          <div class="info-box-compact">
-            🔍 <strong>Tesseract</strong> — быстрый<br>
-            🤖 <strong>Gemini</strong> — точный (99%)
-          </div>
+          <button class="btn btn-primary btn-block btn-lg" id="btnYandexOcr" disabled>
+            <span class="btn-icon">🌐</span>
+            <span>Распознать (Yandex OCR)</span>
+          </button>
           
           <div id="ocrStatus" class="progress hidden">
             <div class="progress-row">
-              <span class="muted small">OCR...</span>
+              <span class="muted small" id="ocrStatusText">OCR...</span>
             </div>
             <div class="progressbar">
               <div id="ocrBar" class="progressbar-fill"></div>
@@ -210,21 +199,21 @@
     <dialog id="aboutDialog" class="dialog">
       <form method="dialog">
         <h2>🔍 LabelSpy 3.0</h2>
-        <p>Профессиональный AI-анализатор пищевых этикеток с поддержкой Google Gemini AI.</p>
+        <p>Профессиональный AI-анализатор пищевых этикеток с Yandex OCR.</p>
         <ul class="feature-list">
-          <li>🔍 <strong>Tesseract OCR</strong> — локальный, быстрый</li>
-          <li>🤖 <strong>Gemini Vision</strong> — 99% точность</li>
-          <li>🌐 <strong>Multi-Proxy</strong> — работа из России</li>
+          <li>🌐 <strong>Yandex OCR</strong> — безопасное облачное распознавание</li>
+          <li>🔒 <strong>Защищённый API</strong> — ключ на backend</li>
           <li>🧭 <strong>AI-аналитика</strong> — умные рекомендации</li>
           <li>📄 <strong>PDF-отчеты</strong> — генерация и скачивание</li>
           <li>🚦 <strong>Светофор</strong> — сахар/жир/соль</li>
+          <li>⚠️ <strong>Аллергены</strong> — автоматическое определение</li>
+          <li>🧪 <strong>E-коды</strong> — анализ пищевых добавок</li>
           <li>💾 <strong>История</strong> — 20 анализов</li>
-          <li>🔄 <strong>Сравнение</strong> — 5 продуктов</li>
-          <li>📱 <strong>PWA</strong> — офлайн-режим</li>
+          <li>📱 <strong>PWA</strong> — работает везде</li>
         </ul>
         <div class="warning-box">
-          <strong>🌐 CORS Proxy:</strong><br>
-          Используется 4 proxy для работы Gemini API из России. Если один не работает — автоматическое переключение на другой.
+          <strong>🌐 Yandex OCR:</strong><br>
+          API вызывается через защищённый backend. API-ключ не видим в браузере.
         </div>
         <div class="dialog-actions">
           <button class="btn btn-primary">Закрыть</button>
@@ -238,7 +227,7 @@
         <summary><strong>💡 Как использовать</strong></summary>
         <ol>
           <li>📸 Загрузи фото этикетки</li>
-          <li>🤖 Нажми <strong>Gemini</strong> для точного OCR</li>
+          <li>🌐 Нажми <strong>Распознать (Yandex OCR)</strong></li>
           <li>✨ <strong>Анализировать</strong> — получи AI-оценку</li>
           <li>📄 <strong>PDF</strong> — скачай отчет</li>
         </ol>
@@ -246,9 +235,9 @@
       <div class="footer-links">
         <a href="https://github.com/codgorbachev-art/labelspy-demo">⭐ GitHub</a>
         <span>•</span>
-        <span class="muted">v3.0.0</span>
+        <span class="muted">v3.1.0 • Yandex OCR</span>
       </div>
-      <p class="footer-copyright">LabelSpy 3.0 • Powered by Tesseract & Gemini AI</p>
+      <p class="footer-copyright">LabelSpy 3.0 • Powered by Yandex OCR</p>
     </div>
   </div>
 
@@ -258,7 +247,6 @@
     }
     window.__LABELSPY_REPO = 'codgorbachev-art/labelspy-demo';
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="./app.js"></script>
 </body>
